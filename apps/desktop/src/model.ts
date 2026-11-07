@@ -535,6 +535,8 @@ export interface Thread {
   pinOrder?: number;
   /** Hidden from Threads until then (wall-clock ms), or until it asks for you; set by Snooze. */
   snoozedUntil?: number | 'needs-you';
+  /** Wall-clock ms it was last snoozed: Snoozed lists the newest first. Unset while awake. */
+  snoozedAt?: number;
   settledAt?: number;
   /** Wall-clock ms it settled (`markSettled`); `settledAt` is on the app clock. */
   settledMs?: number;

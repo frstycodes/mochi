@@ -892,6 +892,7 @@ export const Thread = Schema.Struct({
   context: Schema.Struct({ used: Schema.Number, max: Schema.Number }),
   pinOrder: opt(Schema.Number),
   snoozedUntil: opt(Schema.Union([Schema.Number, Schema.Literal('needs-you')])),
+  snoozedAt: opt(Schema.Number),
   settledAt: opt(Schema.Number),
   settledMs: opt(Schema.Number),
   session: opt(

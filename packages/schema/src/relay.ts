@@ -219,6 +219,16 @@ export const ThreadAction = Schema.Union([
   action('proposal-start', { proposalId: Id }),
   action('autofix-set', { pr: Index, isOn: B }),
   action('auto-archive-set', { pr: Index, isOn: B }),
+  action('snooze', {
+    until: opt(
+      Schema.Union([
+        Int.check(
+          Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+        ),
+        Schema.Literal('needs-you'),
+      ]),
+    ),
+  }),
 ]);
 export type ThreadAction = typeof ThreadAction.Type;
 
@@ -237,6 +247,7 @@ export const THREAD_ACTION_SCOPES = {
   'proposal-start': 'manage',
   'autofix-set': 'manage',
   'auto-archive-set': 'manage',
+  snooze: 'manage',
 } as const satisfies Record<ThreadAction['type'], Scope>;
 
 const PROJECT_NAME = /^(?!\.\.?$)[\w.-]+$/;

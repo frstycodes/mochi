@@ -232,3 +232,19 @@ test('a message the PR tab or a line note writes for you is sent there as typed;
     null,
   );
 });
+
+test('a snooze or its undo crosses as the thread’s own action', () => {
+  assert.deepEqual(
+    commandFor({ type: 'snooze', threadId: 't', until: 'needs-you' }),
+    {
+      type: 'thread-action',
+      threadId: 't',
+      action: { type: 'snooze', until: 'needs-you' },
+    },
+  );
+  assert.deepEqual(commandFor({ type: 'snooze', threadId: 't' }), {
+    type: 'thread-action',
+    threadId: 't',
+    action: { type: 'snooze' },
+  });
+});

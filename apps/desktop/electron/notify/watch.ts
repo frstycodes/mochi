@@ -9,7 +9,7 @@ import type {
   ThreadAddressed,
   WatchConfig,
 } from '../../src/host/types/notify.ts';
-import { isAddressed, isQuiet } from '../../src/notify/model.ts';
+import { isAddressed, isQuiet, isSnoozeMuted } from '../../src/notify/model.ts';
 import { resetLabel } from '../../src/usage/limits.ts';
 import {
   ciTitle,
@@ -170,6 +170,7 @@ function alert(notice: OsNotice) {
     BrowserWindow.getFocusedWindow() ||
     !config.kinds.includes(notice.kind) ||
     config.muted.includes(notice.threadId) ||
+    isSnoozeMuted(notice.kind, notice.threadId, config.snoozed ?? []) ||
     isQuiet(config.quiet, new Date())
   )
     return;

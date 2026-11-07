@@ -85,6 +85,7 @@ import {
   DEFAULT_CONTEXT,
   prefsNow,
   type ProjectionContext,
+  wallNow,
 } from './context.ts';
 import { leftSession, switchProvider } from '../rewind/switch.ts';
 import { threadRoot } from '../git/root.ts';
@@ -105,6 +106,7 @@ import { markSeen, type SeenAction } from './seen.ts';
 import type { TriggerDraft } from '../schedule/calls.ts';
 import { describeTrigger } from '../schedule/describe.ts';
 import { markSettled } from '../settled/settled.ts';
+import { wakeSnoozed } from '../snooze.ts';
 
 export interface ThreadsState {
   now: number;
@@ -133,6 +135,8 @@ export type ThreadsAction =
   | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
+  /** Hides it under Snoozed until `until` (wall-clock ms) or until it asks for you; unset wakes it now (`wakeSnoozed`). */
+  | { type: 'snooze'; threadId: string; until?: Thread['snoozedUntil'] }
   | { type: 'rename'; threadId: string; title: string }
   /** A browser tab Core opened or that navigated (`ThreadPages`): added, or its url and title replaced. */
   | { type: 'browser-tab'; threadId: string; tab: ThreadBrowserTab }
@@ -359,7 +363,8 @@ export function initialThreads(
   );
   return {
     now: Math.max(NOW0, saved?.now ?? 0),
-    threads: [...demo, ...(saved?.threads ?? [])],
+    // A snooze whose time passed while Mochi was closed is over before anything lists it.
+    threads: [...demo, ...wakeSnoozed([], saved?.threads ?? [], wallNow())],
     seq: Math.max(1, saved?.seq ?? 0),
     checkpoints: { ...checkpoints, ...saved?.checkpoints },
     checkpointSeq,
@@ -371,8 +376,11 @@ export function initialThreads(
 }
 
 export function threadsReducer(state: State, action: Action): State {
-  const next = reduce(state, action);
-  return next === state ? state : recordCheckpoints(state, next);
+  const reduced = reduce(state, action);
+  const next = reduced === state ? state : recordCheckpoints(state, reduced);
+  // Any fold can end a snooze: Core's minute tick when its time comes, the event that has the thread ask for you.
+  const threads = wakeSnoozed(state.threads, next.threads, wallNow());
+  return threads === next.threads ? next : { ...next, threads };
 }
 
 function reduce(state: State, action: Action): State {
@@ -477,6 +485,18 @@ function reduce(state: State, action: Action): State {
           status: 'running',
         })),
       };
+    case 'snooze': {
+      const { until } = action;
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => {
+          if (until !== undefined)
+            return { ...t, snoozedUntil: until, snoozedAt: wallNow() };
+          const { snoozedUntil: _, snoozedAt: __, ...awake } = t;
+          return awake;
+        }),
+      };
+    }
     case 'browser-tab':
       return {
         ...state,

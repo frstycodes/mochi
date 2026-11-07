@@ -52,6 +52,7 @@ export const WatchConfig = Schema.Struct({
   kinds: List(Str(64)),
   quiet: QuietHours,
   muted: List(ThreadId),
+  snoozed: opt(List(ThreadId)),
   needsYou: List(ThreadId),
   dockBadge: B,
 });

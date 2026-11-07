@@ -1,5 +1,6 @@
 import { isListed, isStreamedOnly, MAX_PINS, type Thread } from './model.ts';
 import { settledMsOf } from './settled/settled.ts';
+import { isSnoozed } from './snooze.ts';
 
 /**
  * Sidebar drag and drop: both lists keep the dropped order, threads not listed
@@ -172,16 +173,25 @@ export interface ThreadGroup {
   subs: Thread[];
 }
 
-/** Pinned and Threads as the sidebar shows them: top-level rows only, each carrying its sub-threads wherever they'd sort alone. */
+/**
+ * Pinned, Threads and Snoozed as the sidebar shows them: top-level rows only, each carrying its sub-threads wherever they'd sort
+ * alone. A snoozed thread leaves Threads for Snoozed until it wakes (`wakeSnoozed`); a pin outlasts no snooze, so Pinned has none.
+ */
 export function sidebarGroups(threads: Thread[], spaceId: string) {
   const group = (t: Thread): ThreadGroup => ({
     thread: t,
     subs: openSubtree(threads, t.id),
   });
   const isTop = (t: Thread) => !parentOf(threads, t);
+  const unpinned = activeThreads(threads, spaceId).filter(isTop);
   return {
     pinned: pinnedThreads(threads, spaceId).filter(isTop).map(group),
-    active: activeThreads(threads, spaceId).filter(isTop).map(group),
+    active: unpinned.filter((t) => !isSnoozed(t)).map(group),
+    // The one snoozed last on top, as you'd look for what you just put away.
+    snoozed: unpinned
+      .filter(isSnoozed)
+      .sort((a, b) => (b.snoozedAt ?? 0) - (a.snoozedAt ?? 0))
+      .map(group),
   };
 }
 

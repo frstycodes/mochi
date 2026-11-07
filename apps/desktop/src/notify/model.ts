@@ -72,6 +72,16 @@ export const isAlertKind = (
   kind: NoticeKind,
 ): kind is NoticeKind & keyof typeof ALERT_KINDS => kind in ALERT_KINDS;
 
+/** What wakes a snoozed thread (`asksForYou`), so it still alerts: it asks for you, stops on an error, or hits a limit. */
+const WAKE_KINDS: readonly string[] = ['needs-you', 'failed', 'limit'];
+
+/** A snoozed thread stays quiet except for what wakes it: main hears an agent event before the renderer folds the wake in. */
+export const isSnoozeMuted = (
+  kind: string,
+  threadId: string,
+  snoozed: readonly string[],
+) => snoozed.includes(threadId) && !WAKE_KINDS.includes(kind);
+
 /**
  * What you did in a notice's thread, and where it stands now. `thread`/`queue` are absent in main, which only hears view and act
  * signals, so the rules that read them don't fire there.

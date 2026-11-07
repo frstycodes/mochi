@@ -420,6 +420,7 @@ function SpaceNav({
   const {
     pinned,
     active,
+    snoozed,
     settled: allSettled,
   } = filteredSidebarLists(
     threads,
@@ -429,9 +430,10 @@ function SpaceNav({
   );
   const settled = allSettled.slice(0, SIDEBAR_SETTLED);
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
-  const order = [...flattenGroups([...pinned, ...active]), ...settled].map(
-    (t) => t.id,
-  );
+  const order = [
+    ...flattenGroups([...pinned, ...active, ...snoozed]),
+    ...settled,
+  ].map((t) => t.id);
   const selection = useThreadSelection(
     order,
     view.kind === 'thread' ? view.id : undefined,
@@ -446,6 +448,11 @@ function SpaceNav({
         selection.onClick(e, t.id) && go({ kind: 'thread', id: t.id })
       }
       onRename={() => startRename(t.id, 'row')}
+      onSnooze={
+        canSnooze(t, isSub)
+          ? (until) => dispatch({ type: 'snooze', threadId: t.id, until })
+          : undefined
+      }
     />
   );
   const rowActions = useStableHandlers({
@@ -506,6 +513,34 @@ function SpaceNav({
           }
         />
 
+        {snoozed.length > 0 && (
+          <FoldGroup label="Snoozed" count={snoozed.length}>
+            {flattenGroups(snoozed).map((t) => {
+              const group = snoozed.find((g) => g.subs.includes(t));
+              return (
+                <ThreadRowMenu
+                  key={t.id}
+                  threadId={t.id}
+                  selectedIds={selection.ids}
+                >
+                  <SidebarMenuItem
+                    data-thread-row={t.id}
+                    className={cn(group && 'pl-[27px]')}
+                  >
+                    {group && (
+                      <SubThreadGuide
+                        isLast={group.subs.at(-1) === t}
+                        className="left-[15px]"
+                      />
+                    )}
+                    {row(t, !!group)}
+                  </SidebarMenuItem>
+                </ThreadRowMenu>
+              );
+            })}
+          </FoldGroup>
+        )}
+
         {settled.length > 0 && (
           <FoldGroup label="Settled" count={allSettled.length}>
             {settled.map((t) => (
@@ -536,6 +571,13 @@ function SpaceNav({
     </>
   );
 }
+
+/**
+ * Snooze is offered on a top-level row in Threads or Snoozed: pinning or settling ends a snooze (`wakeSnoozed`). Another
+ * computer's thread snoozes there (`thread-action`), where its wake runs too.
+ */
+const canSnooze = (t: Thread, isSub: boolean) =>
+  !isSub && t.pinOrder === undefined && t.status !== 'settled';
 
 /** The newest settled threads the sidebar lists; View all opens the rest on the Settled page. */
 const SIDEBAR_SETTLED = 10;
@@ -1229,7 +1271,7 @@ export function ThreadItem({
 }: {
   thread: Thread;
   isSub?: boolean;
-  /** Shows the Snooze action beside Settle. GAP: nothing passes it outside the `#thread-rows` mock until snoozing is stored. */
+  /** Shows the Snooze action beside Settle (`canSnooze`). */
   onSnooze?: (until: Thread['snoozedUntil']) => void;
   /** Listed under its own project already (new thread's Recent): the detail line drops the project icon. */
   isProjectHidden?: boolean;

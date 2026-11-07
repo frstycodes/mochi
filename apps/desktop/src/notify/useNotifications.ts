@@ -4,6 +4,7 @@ import { toast } from '../toast/store.ts';
 import { queueToast } from '../QueueToast';
 import { host } from '../host';
 import { isListed } from '../model';
+import { isSnoozed } from '../snooze';
 import { threadCwd } from '../host/cwd';
 import type { WatchConfig } from '../host/types/notify';
 import { getProfiles } from '../profiles';
@@ -222,6 +223,7 @@ function watchConfig(
     kinds: alertKinds,
     quiet,
     muted,
+    snoozed: state.threads.filter(isSnoozed).map((t) => t.id),
     needsYou: [
       ...state.threads
         .filter((t) => t.status === 'needs-you' && isListed(t))

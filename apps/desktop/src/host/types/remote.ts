@@ -416,7 +416,9 @@ export type RemoteThreadAction =
   | { type: 'proposal-start'; proposalId: string }
   /** On from when that computer gets it. */
   | { type: 'autofix-set'; pr: number; isOn: boolean }
-  | { type: 'auto-archive-set'; pr: number; isOn: boolean };
+  | { type: 'auto-archive-set'; pr: number; isOn: boolean }
+  /** Unset wakes it; that computer stamps when (`snoozedAt`). */
+  | { type: 'snooze'; until?: number | 'needs-you' };
 
 export type ThreadPoint =
   | { kind: 'message'; index: number }

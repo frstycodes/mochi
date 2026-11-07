@@ -614,3 +614,17 @@ test('a browser tab on another computer needs `operate`, and its input is a clic
   ])
     assert.ok(isRefused(bad), JSON.stringify(bad));
 });
+
+test('a snooze crosses with its wake time or none, and the machine stamps when it was snoozed', () => {
+  const snooze = (action: object) => ({
+    type: 'thread-action',
+    threadId: 't',
+    action: { type: 'snooze', ...action },
+  });
+  for (const until of [1_760_000_000_000, 'needs-you'] as const)
+    assert.deepEqual(decode(snooze({ until })), snooze({ until }));
+  assert.deepEqual(decode(snooze({})), snooze({}));
+  assert.deepEqual(decode(snooze({ snoozedAt: 5 })), snooze({}));
+  for (const until of [-1, 1.5, 'later'])
+    assert.ok(isRefused(snooze({ until })), String(until));
+});
