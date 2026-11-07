@@ -75,6 +75,30 @@ test("Mochi's approval widgets stay their own row mid-turn; the turn's later wor
   );
 });
 
+test('files the agent sent stay their own row mid-turn, never folded into its work group', () => {
+  const sent: ActivityEntry = {
+    ...e('event', 'claude', 'Claude sent 2 files'),
+    attachments: {
+      files: [
+        { path: '/r/shot.png', size: 1 },
+        { path: '/r/demo.mp4', size: 2 },
+      ],
+    },
+  };
+  const rows = chatRows([
+    e('message', 'you', 'record a demo'),
+    e('tool', 'claude', 'Run pnpm e2e'),
+    sent,
+    e('tool', 'claude', 'Mcp mochi: send_files'),
+    e('message', 'claude', 'Here it is.'),
+  ]);
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    ['message', 'work', 'event', 'work', 'message'],
+  );
+  assert.equal(rows[2].kind === 'event' && rows[2].entry, sent);
+});
+
 test('a turn of tools, prose, tools, prose, tools makes three groups in place', () => {
   assert.deepEqual(
     shape([

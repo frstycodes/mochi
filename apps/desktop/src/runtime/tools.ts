@@ -45,7 +45,7 @@ import {
 } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { providerName } from '../secondOpinion/verdict.ts';
-import { BROWSER_TOOLS } from './browserTools.ts';
+import { BROWSER_TOOLS, resolvePath } from './browserTools.ts';
 import { DEV_SERVER_TOOLS } from './devServerTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS } from './controls.ts';
@@ -97,6 +97,8 @@ export interface ToolEnv {
   >;
   /** The profile's projects, which `move_to_project` offers. */
   projects: (spaceId: string) => Promise<Project[]>;
+  /** A file's size in bytes at an absolute path; null when it isn't a file. */
+  fileSize: (path: string) => Promise<number | null>;
   /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
   cwdOf: (thread: Thread) => string | null | undefined;
   /** The models `provider` offers the profile's account; empty when they couldn't be read. */
@@ -1151,6 +1153,35 @@ const USER_SPECS = {
         },
         isFinal: true,
       };
+    },
+  },
+  send_files: {
+    run: async ({ caller, args, env, dispatch }) => {
+      const root = env.cwdOf(caller);
+      const files = await Promise.all(
+        args.paths.map(async (path) => {
+          const full = resolvePath(root, path);
+          if (!full)
+            throw new Error(
+              `${path} is relative and this thread has no working directory; pass an absolute path`,
+            );
+          const size = await env.fileSize(full);
+          if (size === null) throw new Error(`${full} is not a file`);
+          return { path: full, size };
+        }),
+      );
+      const caption = args.caption?.trim();
+      dispatch({
+        type: 'say',
+        threadId: caller.id,
+        entry: {
+          who: caller.providers[0],
+          kind: 'event',
+          text: `${authorName(caller.providers[0])} sent ${plural(files.length, 'a file', `${files.length} files`)}`,
+          attachments: { files, ...(caption && { caption }) },
+        },
+      });
+      return { result: { sent: files.map((f) => f.path) } };
     },
   },
   notify_user: {

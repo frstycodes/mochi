@@ -308,6 +308,12 @@ export const TOOL_GUIDE = {
     description:
       'Draft a request about Mochi’s own settings in Settings › Ask Mochi, with a toast to open it. Only the settings chat can read or suggest settings.',
   },
+  send_files: {
+    group: 'Reaching you',
+    label: 'Send you files',
+    description:
+      'Show you images, videos and other files in the thread, to view there or open in their own app. Reads nothing new and changes nothing.',
+  },
   notify_user: {
     group: 'Reaching you',
     label: 'Notify you',

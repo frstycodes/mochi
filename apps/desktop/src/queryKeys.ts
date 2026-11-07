@@ -81,6 +81,7 @@ export const queryKeys = {
   },
   chat: {
     imageBlob: (src: string) => ['image-blob', src] as const,
+    fileIcon: (extension: string) => ['file-icon', extension] as const,
     githubRef: {
       ref: (refKey: string) => ['github-ref', refKey] as const,
       scoped: (

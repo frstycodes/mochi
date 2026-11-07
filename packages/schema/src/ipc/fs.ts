@@ -76,6 +76,9 @@ export const fsRpc = {
     Schema.Void,
   ),
   reveal: invoke(T([Str(), Str()]), Schema.Void),
+  size: invoke(T([Str()]), Schema.NullOr(N)),
+  open: invoke(T([Str()]), Schema.Void),
+  fileIcon: invoke(T([Str(1024)]), Schema.NullOr(S)),
   pickFolder: invoke(T([o(Str())]), Schema.NullOr(S)),
   folders: invoke(
     T([Str()]),

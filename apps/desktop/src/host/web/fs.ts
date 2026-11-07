@@ -1,4 +1,5 @@
 import { joinPath } from '../../chat/fileMentions.ts';
+import { SENT_FILES } from './sentFiles.ts';
 import { compileQuery, matchLines } from '@mochi/domain/files/search';
 import type {
   FileContent,
@@ -47,7 +48,9 @@ export const fs: FsHost = {
   async list() {
     return [...files.keys()].sort();
   },
-  async read(_root, path): Promise<FileContent> {
+  async read(root, path): Promise<FileContent> {
+    const sent = SENT_FILES[`${root}/${path}`];
+    if (sent) return sent;
     const file = files.get(path);
     if (!file) throw new Error(`${path} does not exist`);
     return { kind: 'text', ...file };
@@ -82,6 +85,16 @@ export const fs: FsHost = {
   async openIn() {},
   async reveal() {
     throw new Error('Revealing files needs the desktop app');
+  },
+  async size() {
+    return null;
+  },
+  async open() {
+    throw new Error('Opening files needs the desktop app');
+  },
+  // No OS to ask: the caller falls back to its own icon.
+  async fileIcon() {
+    return null;
   },
   // A browser can't list folders: a fixed tree, so Open folder's suggestions and Tab completion can be tried.
   async folders(path) {

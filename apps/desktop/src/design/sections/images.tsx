@@ -12,7 +12,8 @@ import { openPhotos } from '../../photo/photos';
 import { cn } from '@/lib/utils';
 import { ChatView } from '../../ChatView';
 import { SplitContext } from '../../layout/SplitContext';
-import { NOW0, type ActivityEntry } from '../../model';
+import { NOW0, type ActivityEntry, type SentFiles } from '../../model';
+import { SentFilesRow } from '../../chat/SentFiles';
 import { useHarness } from '../../store';
 
 const { dunes, screenshot, fern, coast, mochi } = DEMO_PHOTOS;
@@ -173,6 +174,20 @@ export function ImagesSection() {
           </div>
         </Block>
         <Block
+          title="Sent by the agent"
+          use="send_files: images as tiles that open the viewer, a video in its player with its file row under it, anything else as a file with the OS's own icon (the generic one in a browser) that opens in its default app; Show in Finder on hover. The caption sits under them all."
+        >
+          <div className="flex flex-col gap-6 rounded-xl border p-4">
+            <SentFilesRow sent={SENT} />
+            <SentFilesRow
+              sent={{
+                files: [{ path: '/demo/out/report.pdf', size: 1_240_000 }],
+              }}
+            />
+          </div>
+        </Block>
+
+        <Block
           wide
           title="In the transcript"
           use="The real ChatView on a demo thread: your images, a tool that returned a screenshot (folded thumbs, open the group for the row), a markdown image, and Codex-style generations running and done."
@@ -323,6 +338,17 @@ function TranscriptSample() {
   );
 }
 
+const SENT: SentFiles = {
+  files: [
+    { path: '/demo/out/chart-before.svg', size: 2_100 },
+    { path: '/demo/out/chart-after.svg', size: 2_140 },
+    { path: '/demo/out/walkthrough.webm', size: 18_371 },
+    { path: '/demo/out/usage-export.csv', size: 48_200 },
+    { path: '/demo/out/build-logs.zip', size: 3_400_000 },
+  ],
+  caption: 'Before and after the fix, the walkthrough, and the raw export',
+};
+
 const PROMPT =
   'A mochi mascot sticker, soft pastel, white outline, on a mint background';
 const TRANSCRIPT: ActivityEntry[] = [
@@ -377,6 +403,21 @@ const TRANSCRIPT: ActivityEntry[] = [
       status: 'running',
       prompt: 'The same mascot waving, transparent background',
     },
+  },
+  {
+    at: NOW0,
+    who: 'claude',
+    kind: 'tool',
+    text: 'Mcp mochi: send_files',
+    toolId: 'img-5',
+    mcp: { server: 'mochi', tool: 'send_files' },
+  },
+  {
+    at: NOW0,
+    who: 'claude',
+    kind: 'event',
+    text: 'Claude sent 5 files',
+    attachments: SENT,
   },
 ];
 

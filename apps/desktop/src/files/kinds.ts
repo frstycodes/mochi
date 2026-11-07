@@ -121,6 +121,25 @@ export function worktreeLink(
   return line ? `${path}:${line}` : path;
 }
 
+const VIDEO_MIMES: Record<string, string> = {
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  // Chromium won't play a blob typed video/quicktime, but plays an H.264 .mov typed as mp4.
+  mov: 'video/mp4',
+  webm: 'video/webm',
+  ogv: 'video/ogg',
+};
+
+/** How a file the agent sent shows: an image tile, a player, or a file to open. */
+export function sentKind(path: string): 'image' | 'video' | 'file' {
+  if (PREVIEW_KINDS.image.test(path) || PREVIEW_KINDS.svg.test(path))
+    return 'image';
+  return videoMime(path) ? 'video' : 'file';
+}
+
+export const videoMime = (path: string): string | undefined =>
+  VIDEO_MIMES[path.split('.').pop()!.toLowerCase()];
+
 export function imageMime(path: string) {
   const ext = path.split('.').pop()!.toLowerCase();
   return ext === 'jpg'

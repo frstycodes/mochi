@@ -85,6 +85,10 @@ const project = (name: string, isMissing = false) =>
     isMissing,
   }) as Project;
 const PROJECTS = [project('api'), project('web'), project('gone', true)];
+const FILE_SIZES: Record<string, number> = {
+  '/repo/rl/out/shot.png': 2048,
+  '/tmp/demo.mp4': 9_000_000,
+};
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
 function setup({
@@ -260,6 +264,7 @@ function setup({
     },
     projects: async () => PROJECTS,
     cwdOf: () => '/repo/rl',
+    fileSize: async (path) => FILE_SIZES[path] ?? null,
     models: async () => CLAUDE_DEMO_MODELS,
     askSecondOpinion: async () => 'codex',
     profiles: {
@@ -1473,6 +1478,35 @@ test('send_to_thread sends into the other thread as a message from this one, wit
     "the sender's call row knows what it sent",
   );
   assert.equal(t.toasts.length, 0);
+});
+
+test('send_files logs the files, resolved against the worktree and sized, as one row with its caption, at any agent setting', async () => {
+  const t = setup({ control: 'read' });
+  const r = await t.ok('send_files', {
+    paths: ['out/../out/shot.png', '/tmp/demo.mp4'],
+    caption: ' Before and after ',
+  });
+  assert.deepEqual(r.sent, ['/repo/rl/out/shot.png', '/tmp/demo.mp4']);
+  const row = t.thread('rl').activity.at(-1)!;
+  assert.equal(row.kind, 'event');
+  assert.match(row.text, /sent 2 files$/);
+  assert.deepEqual(row.attachments, {
+    files: [
+      { path: '/repo/rl/out/shot.png', size: 2048 },
+      { path: '/tmp/demo.mp4', size: 9_000_000 },
+    ],
+    caption: 'Before and after',
+  });
+  assert.equal(t.toasts.length, 0);
+  assert.match(
+    await t.err('send_files', { paths: ['/repo/rl/out/shot.png', 'gone.txt'] }),
+    /\/repo\/rl\/gone\.txt is not a file/,
+  );
+  assert.equal(
+    t.thread('rl').activity.at(-1),
+    row,
+    'one missing file sends none',
+  );
 });
 
 test('delete_thread with approval removes the thread everywhere, and the worktree only when ticked', async () => {
