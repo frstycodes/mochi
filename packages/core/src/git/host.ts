@@ -461,7 +461,7 @@ export type CoreServed = 'pr' | 'worktreePrs' | 'refStates';
 /**
  * The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. A new branch starts at
  * `base` (the default branch when unset); one that already exists (a restart after cleanup, or `isExisting`) is checked out,
- * refused when another worktree has it, and refused outright on an `isNew` start, which asked for a branch of its own.
+ * reusing its checkout when explicitly selected, and refused outright on an `isNew` start, which asked for a branch of its own.
  */
 export async function addWorktree(
   root: string,
@@ -490,15 +490,15 @@ export async function createWorktree(
   return { dir, isNew: true };
 }
 
-/** A restart's worktree that its title moved out of `<threadId>` (`nameThread`), found by the branch only it has checked out. */
+/** An explicitly selected branch reuses any checkout; a restart only rediscovers Mochi's own worktrees. */
 async function namedWorktree(
   top: string,
   branch: string,
   { isNew, isExisting }: WorktreeOptions,
 ) {
-  if (isNew || isExisting) return undefined;
+  if (isNew && !isExisting) return undefined;
   return (await listWorktrees(top)).find(
-    (w) => w.branch === branch && isUnderWorktreeRoot(w.path),
+    (w) => w.branch === branch && (isExisting || isUnderWorktreeRoot(w.path)),
   )?.path;
 }
 
