@@ -1,6 +1,6 @@
 import type { ActivityEntry } from './model.ts';
 import { isMochiTarget } from './chat/mochiCalls.ts';
-import { isSendTarget } from './chat/threadMessages.ts';
+import { isMessageTarget } from './chat/threadMessages.ts';
 import { plural } from '@mochi/domain/lib/format';
 
 export type ToolVerb =
@@ -161,13 +161,13 @@ const TURN_PHRASES: {
   },
   {
     key: 'message',
-    matches: isSendTarget,
+    matches: isMessageTarget,
     forms: { one: 'messaged # thread', other: 'messaged # threads' },
   },
   {
     key: 'mochi',
     matches: (c) =>
-      c.verb === 'Mcp' && !isSendTarget(c) && isMochiTarget(c.target),
+      c.verb === 'Mcp' && !isMessageTarget(c) && isMochiTarget(c.target),
     forms: {
       one: 'used Mochi',
       two: 'used Mochi twice',
@@ -177,7 +177,7 @@ const TURN_PHRASES: {
   {
     key: 'mcp',
     matches: (c) =>
-      c.verb === 'Mcp' && !isSendTarget(c) && !isMochiTarget(c.target),
+      c.verb === 'Mcp' && !isMessageTarget(c) && !isMochiTarget(c.target),
     forms: { one: 'called # MCP tool', other: 'called # MCP tools' },
   },
   {

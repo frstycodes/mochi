@@ -168,3 +168,17 @@ test('skills used and MCP calls by server come from the log, out of the built-in
     'Ran 1 command, used 1 skill, called 1 MCP tool',
   );
 });
+
+test('a report to the parent counts as messaging a thread', () => {
+  const call = (tool: string): ActivityEntry => ({
+    at: 0,
+    who: 'claude',
+    kind: 'tool',
+    text: `Mcp mochi: ${tool}`,
+    mcp: { server: 'mochi', tool },
+  });
+  assert.equal(
+    turnSummary([call('send_to_thread'), call('report_to_parent')]),
+    'Messaged 2 threads',
+  );
+});

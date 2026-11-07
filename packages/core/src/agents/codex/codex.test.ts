@@ -159,6 +159,56 @@ test('a message that never streamed arrives whole from item/completed, once', ()
   );
 });
 
+test('an MCP call starts with its arguments and ends with its result text, or its error marked as one (codex-cli 0.167.0 item shape)', () => {
+  const s = threadState('h1', '/repo');
+  const item = {
+    type: 'mcpToolCall',
+    id: 'm1',
+    server: 'linear',
+    tool: 'get_issue',
+    arguments: { id: 'MOC-1' },
+  };
+  assert.deepEqual(
+    mapNotification('item/started', { threadId: 't', item }, s),
+    [
+      {
+        threadId: 'h1',
+        type: 'tool',
+        id: 'm1',
+        phase: 'start',
+        text: 'Mcp linear: get_issue',
+        mcp: { server: 'linear', tool: 'get_issue' },
+        input: { id: 'MOC-1' },
+      },
+    ],
+  );
+  const done = {
+    ...item,
+    status: 'completed',
+    result: { content: [{ type: 'text', text: 'Found it' }] },
+  };
+  const [ok] = mapNotification(
+    'item/completed',
+    { threadId: 't', item: done },
+    s,
+  );
+  assert.equal(ok.type === 'tool' && ok.output, 'Found it');
+  const failed = {
+    ...item,
+    status: 'failed',
+    error: { message: 'No such issue' },
+  };
+  const [end] = mapNotification(
+    'item/completed',
+    { threadId: 't', item: failed },
+    s,
+  );
+  assert.deepEqual(
+    end.type === 'tool' && { isError: end.isError, output: end.output },
+    { isError: true, output: 'No such issue' },
+  );
+});
+
 test('a context compaction item is the compaction starting and ending', () => {
   const s = threadState('h1', '/repo');
   const item = { type: 'contextCompaction', id: 'c1' };

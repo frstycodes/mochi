@@ -1,6 +1,6 @@
 import type { ActivityEntry } from '../model.ts';
 import {
-  isTurnTool,
+  isWidgetTool,
   MOCHI_SERVER,
   type ToolName,
 } from '@mochi/domain/runtime/toolTable';
@@ -30,8 +30,8 @@ export const MOCHI_CALLS = {
   delete_thread: ['Asking to delete a thread', 'Asked to delete a thread'],
   wrap_up: ['Wrapping up', 'Wrapped up'],
   report_to_parent: [
-    'Reporting to the parent thread',
-    'Reported to the parent thread',
+    'Messaging the parent thread',
+    'Messaged the parent thread',
   ],
   update_plan: ['Updating the plan', 'Updated the plan'],
   start_subagent: ['Starting a subagent', 'Started a subagent'],
@@ -97,9 +97,21 @@ export const MOCHI_CALLS = {
   remove_profile: ['Asking to remove a profile', 'Asked to remove a profile'],
 } satisfies Record<ToolName, [live: string, done: string]>;
 
-/** A Mochi call whose result has its own surface (the plan list, the end-of-turn card), so it gets no work-log row or live title. */
-export const isTurnCall = (entry: Pick<ActivityEntry, 'mcp'>) =>
-  entry.mcp?.server === MOCHI_SERVER && isTurnTool(entry.mcp.tool);
+/** A Mochi call whose outcome its own widget draws (`WIDGET_TOOLS`), so it gets no work-log row or live title; one that failed keeps its row, so the error shows. */
+export const isWidgetCall = (entry: Pick<ActivityEntry, 'mcp' | 'isError'>) =>
+  entry.mcp?.server === MOCHI_SERVER &&
+  isWidgetTool(entry.mcp.tool) &&
+  !entry.isError;
+
+// Lines earlier builds logged for what a widget or a messaging row already shows (the wrap-up, a message, a delegated subagent,
+// a second opinion), and the note a parent logs when its sub-threads' messages wake it (the card marks them delivered).
+const RECORDED_ELSEWHERE =
+  /^(?:\S+ (?:wrapped up the turn|messaged ".*"|delegated ".*" to \w+|asked \w+ for a second opinion)|Sent the sub-thread reports to the agent)$/s;
+
+/** An event line a widget or messaging row already shows: kept in the thread, never drawn. */
+export const isRecordedElsewhere = (
+  entry: Pick<ActivityEntry, 'kind' | 'text'>,
+) => entry.kind === 'event' && RECORDED_ELSEWHERE.test(entry.text);
 
 /** A call's target (`mochi: rename_thread`) is Mochi's own. */
 export const isMochiTarget = (target: string) =>

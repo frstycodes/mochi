@@ -1349,13 +1349,21 @@ function parentReport(
     {
       ...state,
       threads: mapThread(state.threads, sub.id, (t) => ({
-        ...t,
+        ...withSentReport(t, state.threads, report.summary),
         parentReport: report,
       })),
     },
     sub,
     report,
   );
+}
+
+/** The sub-thread's `report_to_parent` row reads as the message it sent its parent. */
+function withSentReport(sub: Thread, threads: Thread[], text: string) {
+  const parent = threads.find((t) => t.id === sub.parent?.threadId);
+  return parent
+    ? markSent(sub, { threadId: parent.id, title: parent.title, text })
+    : sub;
 }
 
 export function log(thread: Thread, entry: ActivityEntry): Thread {

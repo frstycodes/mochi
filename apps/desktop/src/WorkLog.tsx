@@ -47,7 +47,7 @@ import { PREVIEW_KINDS } from './files/kinds';
 import { patchSections } from './chat/turnChanges';
 import { outputLines } from './chat/output';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
-import { isSendCall } from './chat/threadMessages';
+import { isMessageCall } from './chat/threadMessages';
 import {
   ThreadMessageBody,
   ThreadMessageIcon,
@@ -59,6 +59,8 @@ import { isFilePath, revealFile, useImageUrls } from './chat/imageSrc';
 import { threadPath } from './photo/gallery';
 import { useOpenInThread } from './photo/photos';
 import { Expand, FoldChevron } from './Fold';
+import { CallDetail, hasCallDetail } from './chat/CallDetail';
+import { callArgs, callIntent } from './chat/callArgs';
 
 /**
  * One work group (the calls between two messages), folded to a line like Claude's: while live the line names the current
@@ -81,7 +83,9 @@ export function WorkLog({
   const edits = tools
     .map(toolCall)
     .filter((c) => c.verb === 'Edit' || c.verb === 'Write');
-  const failed = tools.filter((e) => (runOf(e)?.exitCode ?? 0) !== 0).length;
+  const failed = tools.filter(
+    (e) => e.isError || (runOf(e)?.exitCode ?? 0) !== 0,
+  ).length;
   const lastTool = entries.findLastIndex((e) => e.kind === 'tool');
   const title = action
     ? { key: `live:${action.label}`, value: action }
@@ -158,6 +162,7 @@ export function WorkLog({
                 <SkillRow
                   key={i}
                   name={call.target}
+                  input={e.input}
                   description={
                     skills.find((s) => s.name === call.target)?.description
                   }
@@ -222,6 +227,8 @@ type ToolEntry = Pick<
   | 'mcp'
   | 'sent'
   | 'images'
+  | 'input'
+  | 'isError'
 >;
 
 /** One call: what it did in words, opening in place to the detail behind it. */
@@ -238,8 +245,12 @@ export function CallRow({
   useLibraryNames();
   const call = toolCall(entry);
   const run = runOf(entry);
-  const detail = callDetail(entry, call, files);
   const description = describeCall(entry);
+  const parts = callParts(entry, call, files, description);
+  const detail = hasCallDetail(parts) && (
+    <CallDetail {...parts} isError={!!entry.isError} />
+  );
+  const isMessage = isMessageCall(entry);
   const changed = call.verb === 'Run' ? (entry.files ?? []) : [];
   if (import.meta.env.DEV && entry.text.includes(DEV_THROW))
     throw new Error(
@@ -264,12 +275,12 @@ export function CallRow({
             className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2"
           />
         )}
-        {isSendCall(entry) ? (
+        {isMessage ? (
           <ThreadMessageIcon direction="to" />
         ) : (
           <CallGlyph call={call} links={entry.links} />
         )}
-        {isSendCall(entry) ? (
+        {isMessage ? (
           <span className="flex min-w-0 flex-1 text-foreground">
             <ThreadMessageLine
               direction="to"
@@ -307,6 +318,9 @@ export function CallRow({
           <span className="shrink-0 font-mono text-xs tabular text-destructive">
             exit {run.exitCode}
           </span>
+        )}
+        {!isRunning && !run && !!entry.isError && (
+          <span className="shrink-0 type-meta text-destructive">failed</span>
         )}
         {/* Rows with nothing to open keep the chevron's width, so stats line up. */}
         {detail ? (
@@ -369,7 +383,31 @@ function CallText({
   );
 }
 
-/** What a call opens to: the command and its output, the edit's diff, the file it read, the pages a search returned. */
+/** What an expanded call shows: the agent's why, its arguments less what the call's own view shows, and that view or the raw result. */
+function callParts(
+  entry: ToolEntry,
+  call: ToolCall,
+  files: ThreadFiles | null,
+  description: string,
+) {
+  const result = callDetail(entry, call, files);
+  const shown = isMessageCall(entry)
+    ? MESSAGE_KEYS
+    : call.verb === 'Run'
+      ? RUN_KEYS
+      : [];
+  return {
+    intent: callIntent(entry.input, description),
+    args: callArgs(entry.input, shown),
+    result,
+    output: result ? undefined : entry.output,
+  };
+}
+
+const RUN_KEYS = ['command'];
+const MESSAGE_KEYS = ['text', 'summary'];
+
+/** The call's own view: the command and its output, the edit's diff, the file it read, the pages a search returned. */
 function callDetail(
   entry: ToolEntry,
   call: ToolCall,
@@ -786,35 +824,70 @@ function sum(calls: ToolCall[], key: 'added' | 'removed') {
 }
 
 /** A skill the agent loaded: its name in the resolved-token colour and what it is for. */
+/** A skill the agent loaded; open, its whole description and what it was invoked with. */
 function SkillRow({
   name,
   description,
+  input,
 }: {
   name: string;
   description?: string;
+  input?: Record<string, unknown>;
 }) {
+  const [isOpen, setOpen] = useState(false);
   const { title } = useLibraryNames().skill(name);
+  const args = callArgs(input, SKILL_KEYS);
+  const hasDetail = !!description || args.length > 0;
   return (
-    <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta">
-      <SkillMark
-        skill={name}
-        fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />}
-      />
-      <span className="shrink-0 text-subtle-foreground">Using skill</span>
-      <span className="shrink-0 font-medium text-info" title={name}>
-        {title}
-      </span>
-      {!!description && (
-        <span
-          className="min-w-0 truncate text-muted-foreground"
-          title={description}
-        >
-          {description}
+    <li className="flex flex-col">
+      <div
+        className={cn(
+          'relative isolate flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta',
+          hasDetail && 'hover:bg-accent/60',
+        )}
+      >
+        {hasDetail && (
+          <button
+            type="button"
+            aria-expanded={isOpen}
+            aria-label={`Using skill ${title}`}
+            onClick={() => setOpen((o) => !o)}
+            className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2"
+          />
+        )}
+        <SkillMark
+          skill={name}
+          fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />}
+        />
+        <span className="shrink-0 text-subtle-foreground">Using skill</span>
+        <span className="shrink-0 font-medium text-info" title={name}>
+          {title}
         </span>
+        {!!description && (
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+            {description}
+          </span>
+        )}
+        {hasDetail && (
+          <FoldChevron
+            isOpen={isOpen}
+            className="ms-auto text-subtle-foreground"
+          />
+        )}
+      </div>
+      {hasDetail && (
+        <Expand isOpen={isOpen}>
+          <div className="px-3 pb-3">
+            <CallDetail intent={description} args={args} />
+          </div>
+        </Expand>
       )}
     </li>
   );
 }
+
+// The skill's name is the row's title.
+const SKILL_KEYS = ['skill'];
 
 function ToolGlyph({ call }: { call: ToolCall }) {
   if (call.verb === 'Run')

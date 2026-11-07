@@ -53,7 +53,9 @@ import { resolveRun } from './models.ts';
 import {
   APPROVAL_TIMEOUT_MS,
   decodeArgs,
+  isMessageTool,
   isQuiet,
+  isWidgetTool,
   tierOf,
   TOOL_TABLE,
   type ArgsOf,
@@ -551,18 +553,19 @@ function record(
       ...(site && { site }),
     });
   const text = `${authorName(ctx.caller.providers[0])} ${changed}`;
-  ctx.dispatch({
-    type: 'say',
-    threadId: ctx.caller.id,
-    entry: {
-      who: ctx.caller.providers[0],
-      kind: 'event',
-      text,
-      ...(glyph && { glyph }),
-      ...(site && { site }),
-      ...(devServer && { devServer }),
-    },
-  });
+  if (!isLoggedElsewhere(name))
+    ctx.dispatch({
+      type: 'say',
+      threadId: ctx.caller.id,
+      entry: {
+        who: ctx.caller.providers[0],
+        kind: 'event',
+        text,
+        ...(glyph && { glyph }),
+        ...(site && { site }),
+        ...(devServer && { devServer }),
+      },
+    });
   if (!isQuiet(name))
     ctx.env.toast(
       text,
@@ -571,6 +574,10 @@ function record(
         : (outcome.undo ?? snapshotUndo(ctx.env, before)),
     );
 }
+
+/** The call's own widget or its messaging row records what it changed; a line would say it twice. A dev server's line is its widget. */
+const isLoggedElsewhere = (name: ToolName) =>
+  isMessageTool(name) || (isWidgetTool(name) && name !== 'start_dev_server');
 
 function snapshotUndo(env: ToolEnv, before: State) {
   const undo = captureUndo(before, env.getState());

@@ -476,3 +476,34 @@ test('reports logged back to back share one card; anything between them starts a
     ['reports(a, b)', 'Merging a.', 'reports(c)'],
   );
 });
+
+test('a Mochi call its own widget draws gets no row, unless it failed; lines a widget already shows are never drawn', () => {
+  const mochi = (
+    tool: string,
+    extra: Partial<ActivityEntry> = {},
+  ): ActivityEntry => ({
+    ...e('tool', 'claude', `Mcp mochi: ${tool}`),
+    mcp: { server: 'mochi', tool },
+    ...extra,
+  });
+  assert.deepEqual(
+    shape([
+      e('message', 'you', 'go'),
+      e('tool', 'claude', 'Read a.ts'),
+      mochi('create_thread'),
+      mochi('wrap_up'),
+      mochi('start_subagent', { isError: true }),
+      mochi('send_to_thread'),
+      mochi('report_to_parent'),
+      e('event', 'claude', 'Claude wrapped up the turn'),
+      e('event', 'claude', 'Claude messaged "Admin usage"'),
+      e('event', 'harness', 'Sent the sub-thread reports to the agent'),
+      e('message', 'claude', 'done'),
+    ]),
+    [
+      'go',
+      'work(Read a.ts, Mcp mochi: start_subagent, Mcp mochi: send_to_thread, Mcp mochi: report_to_parent)',
+      'done',
+    ],
+  );
+});

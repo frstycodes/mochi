@@ -8,15 +8,15 @@ export function SubReportsBlock({ rl }: { rl: Thread }) {
   const entries = useDemoReports(rl);
   return (
     <Block
-      title="Sub-threads · reports in the parent's chat"
-      use="Sub-thread reports, turn ends without one, PR events and replies from messaged threads that land back to back share one card in the parent's chat, never bubbles: what needs you first, each with its agent's mark, its name (opens the thread), its status and the first line, which opens to the whole report and whether the parent's agent has it yet. Up to 4 show open; more fold into one counted line that opens to the same card."
+      title="Sub-threads · messages in the parent's chat"
+      use="Messages from sub-threads (their reports, turn ends without one, PR events) and replies from messaged threads that land back to back share one card in the parent's chat, never bubbles: what needs you first, each with its agent's mark, its name (opens the thread), its status and the first line, which opens to the whole message and whether the parent's agent has it yet. One reads as a message from a sub-thread; up to 4 show open; more fold into one counted line that opens to the same card."
       wide
     >
       <div className="flex flex-col gap-8">
-        {[entries.slice(0, 3), entries].map((list) => (
+        {[entries.slice(0, 1), entries.slice(0, 3), entries].map((list) => (
           <div key={list.length} className="flex flex-wrap items-start gap-6">
             <Frame
-              label={`${list.length} reports · chat width`}
+              label={`${list.length} ${list.length === 1 ? 'message' : 'messages'} · chat width`}
               className="w-[640px] max-w-full"
             >
               <SubReports entries={list} />

@@ -53,6 +53,7 @@ import { claudeEventWindow } from '../../../../../apps/desktop/src/usage/limits.
 import { posixPath } from '../../../../../apps/desktop/electron/platform.ts';
 import type { SaveImage } from '../images.ts';
 import { perOption } from '../questions.ts';
+import { capInput } from '../toolInput.ts';
 
 /**
  * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs and usage totals carry across
@@ -160,6 +161,7 @@ export function createMapper(
         },
       ];
     const description = callDescription(name, input);
+    const stored = capInput(input);
     return [
       {
         threadId,
@@ -169,6 +171,7 @@ export function createMapper(
         text: describeTool(name, input, servers, cwd),
         ...toolKind(name, input, servers),
         ...(description ? { description } : commandOf(name, input)),
+        ...(stored && { input: stored }),
       },
     ];
   }
@@ -200,6 +203,12 @@ export function createMapper(
       phase: 'end',
       ...toolOutcome(tool, block, result),
     };
+    if (block.is_error) end.isError = true;
+    // A command's output is already its tail; a file call's result is the file or the diff its row already shows.
+    if (end.output === undefined && !FILE_TOOLS.has(tool.name)) {
+      const text = resultText(block);
+      if (text) end.output = tail(text);
+    }
     const links = block.is_error
       ? undefined
       : webLinks(tool.name, tool.input, result);
@@ -972,6 +981,7 @@ function imageBlocks(block: ToolResultBlock) {
 }
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
+const FILE_TOOLS = new Set([...EDIT_TOOLS, 'Read']);
 // `Task` is the Agent tool's name in Claude Code before 2.1.
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const TASK_STATUS = {
