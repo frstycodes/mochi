@@ -1,9 +1,18 @@
+import { useContext } from 'react';
 import { createRequestStore } from '@/lib/requestStore';
+import { revealFile, isFilePath } from '../chat/imageSrc';
+import { threadCwd } from '../host/cwd';
+import { ThreadOriginContext, type ThreadOrigin } from '../remote/origin';
+import { useGetState } from '../store';
+import { useOptionalVizThreadId } from '../viz/WidgetVisual';
 import { download } from '../viz/exportVisual';
+import { threadMedia } from './gallery';
 
 export interface Photo {
+  /** A URL, or a file path the viewer reads (on the thread's own computer) as it's shown. */
   src: string;
   name: string;
+  kind?: 'video';
   /** Selects the image's file in Finder; set when it lives on disk (an image the agent generated). */
   reveal?: () => void;
 }
@@ -11,6 +20,8 @@ export interface Photo {
 export interface PhotoRequest {
   photos: Photo[];
   index: number;
+  /** The thread the photos came from, so a path is read on the computer it names. */
+  thread?: { id: string; origin: ThreadOrigin };
 }
 
 const store = createRequestStore<PhotoRequest>();
@@ -19,15 +30,34 @@ const store = createRequestStore<PhotoRequest>();
 export const openPhotos = store.open;
 export const usePhotoRequest = store.use;
 
-/** Every `img[data-photo]` in the same `[data-photo-scope]` (a thread's messages) is one gallery, in reading order. */
-export function openFromScope(img: HTMLImageElement) {
-  const scope = img.closest('[data-photo-scope]') ?? document;
-  const imgs = [...scope.querySelectorAll<HTMLImageElement>('img[data-photo]')];
-  const photos = imgs.map((el) => ({
-    src: el.currentSrc || el.src,
-    name: el.alt || 'Image',
-  }));
-  openPhotos({ photos, index: Math.max(0, imgs.indexOf(img)) });
+/**
+ * Opens the viewer on `src` with every image and video in the current thread as its gallery. Outside a thread, or for a
+ * source the thread doesn't hold (a message still being sent), it opens `fallback` instead.
+ */
+export function useOpenInThread() {
+  const threadId = useOptionalVizThreadId();
+  const getState = useGetState();
+  const origin = useContext(ThreadOriginContext);
+  // Read on click, not subscribed: every image in the chat holds this, and the thread changes with every streamed token.
+  return (src: string, fallback: PhotoRequest) => {
+    const thread = getState().threads.find((t) => t.id === threadId);
+    const root =
+      thread && origin.kind === 'local' ? threadCwd(thread) : undefined;
+    const photos = thread
+      ? threadMedia(thread.activity, root ?? undefined)
+      : [];
+    const index = photos.findIndex((p) => p.src === src);
+    if (!thread || index < 0) return openPhotos(fallback);
+    openPhotos({
+      photos: photos.map((p) =>
+        origin.kind === 'local' && isFilePath(p.src)
+          ? { ...p, reveal: () => void revealFile(p.src) }
+          : p,
+      ),
+      index,
+      thread: { id: thread.id, origin },
+    });
+  };
 }
 
 export async function saveImage(photo: Photo) {

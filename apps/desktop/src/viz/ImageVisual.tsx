@@ -4,21 +4,23 @@ import {
   type DragEvent,
   type ReactNode,
 } from 'react';
+import { Play } from '@/icons';
 import { toast } from '@/toast/store';
 import type { ExtraProps } from 'streamdown';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchImage, imageFileName, openFromScope } from '../photo/photos';
-import { isFilePath, useImageUrls } from '../chat/imageSrc';
+import { threadPath, isVideo } from '../photo/gallery';
+import { fetchImage, imageFileName, useOpenInThread } from '../photo/photos';
+import { useImageUrls } from '../chat/imageSrc';
 import { BrokenImage, IMAGE_OUTLINE } from '../chat/MessageImages';
 import { useThreadFiles } from '../files/viewer';
 
 const IMAGE_DRAG_TYPE = 'application/x-harness-image';
 
 /**
- * Message images: click to open the photo viewer (with the thread's other images as its gallery), drag onto the composer to
- * attach. A local path (absolute, or relative to the thread's folder) is read through the file host.
+ * Message images and videos: click to open the photo viewer (with the thread's other media as its gallery), drag an image onto
+ * the composer to attach. A local path (absolute, or relative to the thread's folder) is read through the file host.
  */
 export function ImageVisual({
   src,
@@ -28,20 +30,20 @@ export function ImageVisual({
   ...props
 }: ComponentProps<'img'> & ExtraProps) {
   const files = useThreadFiles();
-  const path =
-    typeof src === 'string' &&
-    src &&
-    isFilePath(src) &&
-    !src.startsWith('/') &&
-    files
-      ? `${files.root}/${src.replace(/^\.\//, '')}`
-      : src;
+  const openInThread = useOpenInThread();
+  const path = typeof src === 'string' ? threadPath(src, files?.root) : src;
   const [url] = useImageUrls(typeof path === 'string' && path ? [path] : []);
   const [status, setStatus] = useState<'loading' | 'loaded' | 'broken'>(
     'loading',
   );
   if (typeof path !== 'string' || !path) return null;
   const name = alt || path.split('/').pop()!;
+  const isClip = isVideo(path);
+  const open = () =>
+    openInThread(path, {
+      photos: [{ src: path, name, ...(isClip && { kind: 'video' }) }],
+      index: 0,
+    });
   if (status === 'broken' || url === null)
     return <BrokenImage name={name} layout="single" />;
 
@@ -53,7 +55,7 @@ export function ImageVisual({
   return (
     <button
       type="button"
-      onClick={(e) => openFromScope(e.currentTarget.querySelector('img')!)}
+      onClick={open}
       aria-label={`Open ${name}`}
       className={cn(
         'relative my-2 block max-h-60 max-w-[min(100%,20rem)] cursor-zoom-in overflow-hidden rounded-lg bg-muted focus-visible:outline-2 focus-visible:outline-offset-2',
@@ -61,10 +63,27 @@ export function ImageVisual({
       )}
     >
       {status === 'loading' && <Skeleton className="h-40 w-60 rounded-none" />}
-      {!!url && (
+      {!!url && isClip && (
+        <video
+          src={url}
+          muted
+          preload="metadata"
+          onLoadedData={() => setStatus('loaded')}
+          onError={() => setStatus('broken')}
+          className={cn(
+            'block max-h-60 w-auto max-w-full',
+            status === 'loading' && 'absolute size-0 opacity-0',
+          )}
+        />
+      )}
+      {!!url && isClip && status === 'loaded' && (
+        <span className="absolute inset-0 grid place-items-center">
+          <Play aria-hidden className="size-8 text-white drop-shadow" />
+        </span>
+      )}
+      {!!url && !isClip && (
         <img
           {...props}
-          data-photo
           src={url}
           alt={alt}
           draggable

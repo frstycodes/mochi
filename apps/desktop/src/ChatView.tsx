@@ -269,7 +269,6 @@ export function ChatView({
         {!isReadOnly && <ComposerBase />}
         <div
           ref={messages}
-          data-photo-scope
           className="relative mt-(--chat-top,0px) min-h-0 flex-1"
         >
           <VizThreadProvider value={thread.id}>

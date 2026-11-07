@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ImageOff } from '@/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { openPhotos, type Photo } from '../photo/photos';
+import { useOpenInThread, type Photo } from '../photo/photos';
 import { isFilePath, revealFile, useImageUrls } from './imageSrc';
 
 const SHOWN = 4;
@@ -15,7 +15,7 @@ export type Layout = 'single' | 'pair' | 'row';
 
 /**
  * Images in a message: one keeps its shape, two sit side by side as squares, more become a row of small squares with the
- * rest counted on the last. A `src` may be a file path (read through the file host). Each opens the viewer on the set.
+ * rest counted on the last. A `src` may be a file path (read through the file host). Each opens the viewer on the thread's media.
  */
 export function MessageImages({
   photos,
@@ -29,26 +29,14 @@ export function MessageImages({
     photos.length === 1 ? 'single' : photos.length === 2 ? 'pair' : 'row';
   const shown = photos.slice(0, SHOWN);
   const hidden = photos.length - shown.length;
-  // Images that couldn't be read stay out of the viewer; the index counts only the ones before `i` that it shows.
-  const open = (i: number) => {
-    const viewable = photos.flatMap((p, j) =>
-      urls[j]
-        ? [
-            {
-              ...p,
-              src: urls[j]!,
-              ...(isFilePath(p.src) && {
-                reveal: () => void revealFile(p.src),
-              }),
-            },
-          ]
-        : [],
-    );
-    openPhotos({
-      photos: viewable,
-      index: urls.slice(0, i).filter(Boolean).length,
+  const openInThread = useOpenInThread();
+  const open = (i: number) =>
+    openInThread(photos[i].src, {
+      photos: photos.map((p) =>
+        isFilePath(p.src) ? { ...p, reveal: () => void revealFile(p.src) } : p,
+      ),
+      index: i,
     });
-  };
   return (
     <div data-message-images className={cn('flex flex-wrap gap-2', className)}>
       {shown.map((photo, i) => (

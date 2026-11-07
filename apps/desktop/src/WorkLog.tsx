@@ -56,7 +56,8 @@ import {
 import { AnimatedText, ICON_SWAP } from './ui';
 import { MessageImages } from './chat/MessageImages';
 import { isFilePath, revealFile, useImageUrls } from './chat/imageSrc';
-import { openPhotos } from './photo/photos';
+import { threadPath } from './photo/gallery';
+import { useOpenInThread } from './photo/photos';
 import { Expand, FoldChevron } from './Fold';
 
 /**
@@ -398,7 +399,7 @@ function callDetail(
       <MessageImages
         photos={[
           {
-            src: absolutePath(files, call.target),
+            src: threadPath(call.target, files.root),
             name: call.target.split('/').pop()!,
           },
         ]}
@@ -523,11 +524,6 @@ const isImage = (path: string) =>
   PREVIEW_KINDS.image.test(path) || PREVIEW_KINDS.svg.test(path);
 const readImage = (call: ToolCall) =>
   call.verb === 'Read' && isImage(call.target) ? [call.target] : [];
-// A Read's target is relative to the thread's folder when inside it; a returned image is already absolute (or a URL).
-const absolutePath = (files: ThreadFiles, path: string) =>
-  !isFilePath(path) || path.startsWith('/') || !files.root
-    ? path
-    : `${files.root}/${path}`;
 
 /** The images the agent read or captured, small, opening together in the photo viewer. */
 function ImageThumbs({
@@ -537,23 +533,18 @@ function ImageThumbs({
   files: ThreadFiles;
   paths: string[];
 }) {
-  const srcs = paths.map((path) => absolutePath(files, path));
+  const srcs = paths.map((path) => threadPath(path, files.root));
   const urls = useImageUrls(srcs);
-  // Images that couldn't be read stay out of the viewer; the index counts only the ones before `i` that it shows.
-  const open = (i: number) => {
-    const photos = srcs.flatMap((src, j) =>
-      urls[j]
-        ? [
-            {
-              src: urls[j]!,
-              name: imageName(src),
-              ...(isFilePath(src) && { reveal: () => void revealFile(src) }),
-            },
-          ]
-        : [],
-    );
-    openPhotos({ photos, index: urls.slice(0, i).filter(Boolean).length });
-  };
+  const openInThread = useOpenInThread();
+  const open = (i: number) =>
+    openInThread(srcs[i], {
+      photos: srcs.map((src) => ({
+        src,
+        name: imageName(src),
+        ...(isFilePath(src) && { reveal: () => void revealFile(src) }),
+      })),
+      index: i,
+    });
   return srcs.map((src, i) => (
     <button
       key={src}
