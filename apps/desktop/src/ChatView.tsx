@@ -135,6 +135,7 @@ import {
   withAttachedFiles,
 } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
+import { SentFilesRow } from './chat/SentFiles';
 import { DevServerCard } from './chat/DevServerCard';
 import { McpAppCard } from './chat/McpAppCard';
 import { MessageImages } from './chat/MessageImages';
@@ -269,7 +270,6 @@ export function ChatView({
         {!isReadOnly && <ComposerBase />}
         <div
           ref={messages}
-          data-photo-scope
           className="relative mt-(--chat-top,0px) min-h-0 flex-1"
         >
           <VizThreadProvider value={thread.id}>
@@ -523,6 +523,8 @@ const ChatRowView = memo(function ChatRowView({
     );
   if (row.kind === 'event' && row.entry.devServer)
     return <DevServerCard thread={thread} server={row.entry.devServer} />;
+  if (row.kind === 'event' && row.entry.attachments)
+    return <SentFilesRow sent={row.entry.attachments} />;
   if (row.kind === 'event' && row.entry.proposals)
     return <ProposalEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.handoff)

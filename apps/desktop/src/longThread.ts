@@ -41,6 +41,7 @@ function turn(i: number, at: number): ActivityEntry[] {
       who: 'you',
       kind: 'message',
       text: `Step ${i}: tighten the handler in \`${file}\` and keep the tests green.`,
+      ...(i % 3 === 0 && { images: [card(`Screenshot ${i}`, i)] }),
     },
     {
       at,
@@ -98,5 +99,12 @@ const body = parse(await req.json());
 if (!body.ok) return new Response('Bad input', { status: 400 });
 \`\`\`
 
-Tests pass (2 of 2).`;
+Tests pass (2 of 2).${i % 5 === 0 ? `\n\n![Latency after step ${i}](${card(`p95 after step ${i}`, i + 7)})` : ''}`;
+}
+
+/** A small labelled picture, so the photo viewer has a thread's worth of distinct images to page through. */
+function card(label: string, seed: number) {
+  const hue = (seed * 47) % 360;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><rect width="640" height="400" fill="hsl(${hue} 45% 55%)"/><text x="320" y="210" font-family="system-ui" font-size="40" fill="white" text-anchor="middle">${label}</text></svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
 }

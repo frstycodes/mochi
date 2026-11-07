@@ -12,7 +12,7 @@ import { cancelSearch, searchFor } from './search.ts';
 const MAX_FOLDERS = 500;
 
 /** Main keeps these: they open Finder and the folder picker. */
-export type InMain = 'reveal' | 'pickFolder';
+export type InMain = 'reveal' | 'pickFolder' | 'open' | 'fileIcon';
 
 export const fs = {
   list: (_caller, root) => listFiles(root),
@@ -25,6 +25,10 @@ export const fs = {
   openIn: async (_caller, editor, root, path, line) => {
     const file = path ? await resolveInside(root, path) : '';
     await openInEditor(editor, await resolveRoot(root), file, line);
+  },
+  size: async (_caller, at) => {
+    const file = await stat(at).catch(() => null);
+    return file?.isFile() ? file.size : null;
   },
   folders: async (_caller, at) => {
     const dir = path.resolve(at.replace(/^~(?=\/|$)/, homedir()));

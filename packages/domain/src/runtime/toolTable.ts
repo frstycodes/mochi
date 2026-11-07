@@ -842,6 +842,23 @@ export const TOOL_TABLE = {
       "Open your thread's side chat and ask it a question for the user, answered by a separate model that sees this thread. The answer is for the user; it isn't returned to you.",
     shape: { question: Schema.String.check(Schema.isMinLength(1)) },
   },
+  send_files: {
+    tier: 'read',
+    description:
+      'Show the user files in the transcript: images as thumbnails, videos with a player, anything else as a file they can open. For what you made or found that they should see or keep (a screenshot, a recording, an export); not for files they can already see in the diff.',
+    shape: {
+      paths: Schema.Array(Schema.String.check(Schema.isMinLength(1)))
+        .check(Schema.isMinLength(1), Schema.isMaxLength(20))
+        .annotate({
+          description: 'Absolute, or relative to your working directory',
+        }),
+      caption: Schema.optionalKey(
+        Schema.String.check(Schema.isMaxLength(300)).annotate({
+          description: 'One line under the files, like "Before and after"',
+        }),
+      ),
+    },
+  },
   notify_user: {
     tier: 'change',
     quiet: true,
@@ -1137,7 +1154,7 @@ export const tierOf = (name: ToolName): Tier => TOOL_TABLE[name].tier;
 
 export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
 
-/** Called every turn, each with its own surface (the plan list, the end-of-turn card): always loaded for Claude, never deferred behind tool search, and no work-log row. */
+/** Called every turn: always loaded for Claude, never deferred behind tool search. */
 export const TURN_TOOLS = [
   'update_plan',
   'wrap_up',
@@ -1146,6 +1163,35 @@ export const TURN_TOOLS = [
 
 export const isTurnTool = (name: string) =>
   (TURN_TOOLS as readonly string[]).includes(name);
+
+/**
+ * Calls whose outcome a widget of its own draws, so they get no work-log row: the plan list, the next-move box, a thread
+ * card or sub-thread link, a subagent row, a review, a dev server card, an approval card.
+ */
+export const WIDGET_TOOLS = [
+  'update_plan',
+  'wrap_up',
+  'create_thread',
+  'dismiss_thread_proposal',
+  'start_subagent',
+  'ask_second_opinion',
+  'start_dev_server',
+  'delete_thread',
+  'remove_mcp_server',
+  'remove_profile',
+] as const satisfies ToolName[];
+
+export const isWidgetTool = (name: string) =>
+  (WIDGET_TOOLS as readonly string[]).includes(name);
+
+/** Calls that message another agent; their row in the log is the message, as "Messaging <thread>". */
+export const MESSAGE_TOOLS = [
+  'send_to_thread',
+  'report_to_parent',
+] as const satisfies ToolName[];
+
+export const isMessageTool = (name: string) =>
+  (MESSAGE_TOOLS as readonly string[]).includes(name);
 
 export const asks = (tier: Tier) =>
   (ASKING_TIERS as readonly Tier[]).includes(tier);

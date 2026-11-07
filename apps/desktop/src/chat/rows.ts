@@ -1,6 +1,6 @@
 import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
-import { isTurnCall } from './mochiCalls.ts';
+import { isRecordedElsewhere, isWidgetCall } from './mochiCalls.ts';
 import type { TurnAnchor } from './turnAnchor.ts';
 import type { TurnChanges } from './turnChanges.ts';
 import { plural } from '@mochi/domain/lib/format';
@@ -110,7 +110,8 @@ export function chatRows(
       turn = undefined;
       return rows.push({ kind: 'image', key, entry });
     }
-    if (entry.kind === 'tool' && isTurnCall(entry)) return;
+    if (entry.kind === 'tool' && isWidgetCall(entry)) return;
+    if (isRecordedElsewhere(entry)) return;
     if (entry.kind === 'tool' || entry.kind === 'reasoning') {
       isMidWork = true;
       if (turn) turn.entries.push(entry);
@@ -142,9 +143,10 @@ export function chatRows(
         !!entry.subThread ||
         !!entry.subReport ||
         !!entry.proposals ||
-        !!entry.devServer;
+        !!entry.devServer ||
+        !!entry.attachments;
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
-      // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread link, a sub-thread's result, a sub-thread's report, thread cards) stay in view: the turn continues in a new accordion after one.
+      // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread link, a sub-thread's result, a sub-thread's report, thread cards, files sent to you) stay in view: the turn continues in a new accordion after one.
       if (isWidget) turn = undefined;
       if (entry.subReport) {
         const last = rows.at(-1);

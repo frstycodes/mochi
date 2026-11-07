@@ -120,7 +120,8 @@ export type AgentEvent =
    * the query in late). `skill`: the call loaded this skill (Claude's Skill tool, a skill Codex got with the message). `mcp`: the
    * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
    * `command`: the shell command a call runs when its agent sent no `description` (Codex always, Claude sometimes), for main to describe.
-   * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
+   * `input` (start) is the call's arguments, long strings capped. `output` (a command's tail, any other call's result text,
+   * capped), `isError` and `patch` (edits, unified diff) come with `end`.
    */
   | {
       threadId: string;
@@ -130,6 +131,8 @@ export type AgentEvent =
       text: string;
       description?: string;
       command?: string;
+      input?: Record<string, unknown>;
+      isError?: true;
       files?: string[];
       exitCode?: number;
       output?: string;

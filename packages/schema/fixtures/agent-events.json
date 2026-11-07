@@ -62,7 +62,11 @@
    "id": "bash",
    "phase": "start",
    "text": "Run pnpm test",
-   "description": "Run tests"
+   "description": "Run tests",
+   "input": {
+    "command": "pnpm test",
+    "description": "Run tests"
+   }
   },
   {
    "threadId": "t1",

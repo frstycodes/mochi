@@ -72,6 +72,7 @@ import type { ThreadControls } from './runtime/controls';
 import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import type { SlashItem } from './chat/slash';
 import { ComposerEditor } from './chat/ComposerEditor';
+import { OsFileIcon } from './chat/OsFileIcon';
 import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
 import {
   ATTACHMENT_ERRORS,
@@ -486,7 +487,11 @@ function ComposerAttachments() {
                 }
                 className="flex min-w-0 cursor-pointer items-center gap-1.5"
               >
-                <AttachmentPreview />
+                <AttachmentPreview
+                  fallbackIcon={
+                    <OsFileIcon name={f.filename ?? ''} className="size-4" />
+                  }
+                />
                 <AttachmentInfo className="type-caption" />
               </button>
               <AttachmentRemove />

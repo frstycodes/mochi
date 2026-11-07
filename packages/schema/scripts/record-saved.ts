@@ -286,6 +286,10 @@ const live: Thread = {
         fallback: 'timeout',
       },
       turnUndo: { start: 2, isUndone: true },
+      attachments: {
+        files: [{ path: '/repo/out/shot.png', size: 2048 }],
+        caption: 'Before and after',
+      },
       nextMove: { question: 'Commit?', answer: 'Commit' },
     },
     {

@@ -97,6 +97,9 @@ const UnversionedAgentEvent = Schema.Union([
     text: S,
     description: opt(S),
     command: opt(S),
+    /** The call's arguments as the agent sent them, long strings capped (`capInput`). */
+    input: opt(JsonObject),
+    isError: opt(Schema.Literal(true)),
     files: opt(Schema.Array(S)),
     exitCode: opt(N),
     output: opt(S),

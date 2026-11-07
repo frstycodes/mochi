@@ -16,7 +16,12 @@ import { IS_MAC } from '../keys';
 import type { GeneratedImage } from '../model';
 import { isFilePath, revealFile, useImageUrls } from './imageSrc';
 import { GeneratingDots } from './GeneratingDots';
-import { copyImage, openPhotos, saveImage, type Photo } from '../photo/photos';
+import {
+  copyImage,
+  saveImage,
+  useOpenInThread,
+  type Photo,
+} from '../photo/photos';
 import { TooltipIconButton } from '../ui';
 
 export const REVEAL_LABEL = IS_MAC ? 'Show in Finder' : 'Show in folder';
@@ -62,6 +67,9 @@ export function ImageGenCard({
           ...(onReveal && { reveal: onReveal }),
         }
       : null;
+  const openInThread = useOpenInThread();
+  const open = () =>
+    !!photo && openInThread(src!, { photos: [photo], index: 0 });
 
   return (
     <figure
@@ -77,7 +85,7 @@ export function ImageGenCard({
         <button
           type="button"
           aria-label="Open image larger"
-          onClick={() => openPhotos({ photos: [photo], index: 0 })}
+          onClick={open}
           className="absolute inset-0 cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-2"
         >
           <img
@@ -123,7 +131,9 @@ export function ImageGenCard({
           <Elapsed startedMs={startedMs} />
         )}
       </figcaption>
-      {!!photo && <ImageActions photo={photo} onReveal={onReveal} />}
+      {!!photo && (
+        <ImageActions photo={photo} onOpen={open} onReveal={onReveal} />
+      )}
     </figure>
   );
 }
@@ -153,9 +163,11 @@ function FailedFrame({ error }: { error?: string }) {
 
 function ImageActions({
   photo,
+  onOpen,
   onReveal,
 }: {
   photo: Photo;
+  onOpen: () => void;
   onReveal?: () => void;
 }) {
   return (
@@ -164,7 +176,7 @@ function ImageActions({
       <TooltipIconButton
         label="Open larger"
         hint="Zoom and pan in the viewer"
-        onClick={() => openPhotos({ photos: [photo], index: 0 })}
+        onClick={onOpen}
       >
         <Maximize />
       </TooltipIconButton>

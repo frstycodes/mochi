@@ -171,6 +171,11 @@ export interface ActivityEntry {
   toolId?: string;
   /** Tool calls: the agent's own plain-language line for it, the command's output and exit code, an edit's unified diff. */
   description?: string;
+  /** The call's arguments as the agent sent them, long strings capped; absent before this was stored. */
+  input?: Record<string, unknown>;
+  /** The call failed: the agent got an error back. */
+  isError?: true;
+  /** A command's output tail, or any other call's result as text (capped). */
   output?: string;
   exitCode?: number;
   patch?: string;
@@ -202,6 +207,8 @@ export interface ActivityEntry {
   images?: string[];
   /** Tool entries: the image this call made, shown as its own card in the transcript. */
   generated?: GeneratedImage;
+  /** Events only: files the agent sent you (`send_files`), shown as their own row. */
+  attachments?: SentFiles;
   /** Events only: the dev server `start_dev_server` started or found listening, shown as its own card. */
   devServer?: DevServer;
   /** Tool entries: the MCP App view this call declared, shown as its own card after the call's group. */
@@ -322,6 +329,12 @@ export interface DevServer extends RunTarget {
   port: number;
   /** A screenshot of the page once it loaded, as `saveImage` kept it. */
   preview?: string;
+}
+
+/** Files an agent sent, as absolute paths on the computer its thread runs on, with their size in bytes when sent. */
+export interface SentFiles {
+  files: { path: string; size: number }[];
+  caption?: string;
 }
 
 export interface GeneratedImage {

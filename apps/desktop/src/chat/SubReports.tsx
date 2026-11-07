@@ -11,7 +11,7 @@ import { FramedCard, FramedItem } from './FramedCard';
 import { ThreadMessageBody, ThreadName, usePeer } from './ThreadMessage';
 
 /**
- * Sub-thread reports (and replies from messaged threads) logged back to back, as one card: what needs you first, each with its
+ * Messages from sub-threads (their reports, and replies from messaged threads) logged back to back, as one card: what needs you first, each with its
  * agent's mark, its name (opens the thread), its status and first line, which opens to the whole report. Past `SHOWN_OPEN` the
  * card folds into one counted line that opens to it.
  */
@@ -139,7 +139,7 @@ function ReportItem({
       {!!preview && (
         <Expand isOpen={isOpen}>
           <ThreadMessageBody text={entry.text} className="ms-3.5 mt-1">
-            Reported {clock(entry.at)} ·{' '}
+            Received {clock(entry.at)} ·{' '}
             {report.isDelivered
               ? 'Delivered to the agent'
               : 'Waiting for the agent'}
@@ -150,12 +150,13 @@ function ReportItem({
   );
 }
 
-/** "3 reports from sub-threads", or "2 replies from threads" when every one is a messaged thread's reply. */
-function countLabel(entries: ActivityEntry[]) {
+/** Messages like any other between agents: "Message from a sub-thread", "3 messages from sub-threads", or "from threads" when every one is a messaged thread's reply. */
+export function countLabel(entries: Pick<ActivityEntry, 'subReport'>[]) {
   const n = entries.length;
-  if (entries.every((e) => e.subReport!.isReply))
-    return `${n} ${plural(n, 'reply', 'replies')} from threads`;
-  return `${n} ${plural(n, 'report', 'reports')} from sub-threads`;
+  const from = entries.every((e) => e.subReport!.isReply)
+    ? plural(n, 'a thread', 'threads')
+    : plural(n, 'a sub-thread', 'sub-threads');
+  return n === 1 ? `Message from ${from}` : `${n} messages from ${from}`;
 }
 
 /** Stable: what needs you (failed, blocked, waiting) first, otherwise in the order they came. */

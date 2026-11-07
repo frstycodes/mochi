@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { host } from '../host/index.ts';
-import { imageMime } from '../files/kinds';
+import { imageMime, videoMime } from '../files/kinds';
 import { queryKeys } from '../queryKeys';
 import { useThreadOrigin } from '../remote/origin';
 import {
@@ -20,7 +20,7 @@ const isUrl = (src: string) =>
 export const isFilePath = (src: string) => !isUrl(src);
 
 /**
- * Image sources as URLs the page can show: URLs as they are, absolute file paths read through the file host into object
+ * Image (or local video) sources as URLs the page can show: URLs as they are, absolute file paths read through the file host into object
  * URLs (revoked when the sources change or the caller goes). On another computer's thread a path names that computer's file,
  * so it's asked for there (`read-image`), never read from the same path here. Per source: the URL, `undefined` while it
  * loads, `null` when it can't be read.
@@ -88,7 +88,10 @@ export function revealFile(path: string) {
 async function readImage(path: string) {
   const { dir, name } = splitPath(path);
   const content = await host.fs.read(dir, name);
-  const type = /\.svg$/i.test(path) ? 'image/svg+xml' : imageMime(path);
+  // GAP: a video is read whole into memory; a file protocol with range requests would stream it.
+  const type = /\.svg$/i.test(path)
+    ? 'image/svg+xml'
+    : (videoMime(path) ?? imageMime(path));
   return new Blob(
     [(content.kind === 'text' ? content.text : content.bytes) as BlobPart],
     { type },

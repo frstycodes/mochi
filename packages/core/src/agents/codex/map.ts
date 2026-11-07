@@ -22,6 +22,7 @@ import {
 import { posixPath } from '../../../../../apps/desktop/electron/platform.ts';
 import type { SaveImage } from '../images.ts';
 import { perOption } from '../questions.ts';
+import { capInput } from '../toolInput.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -561,19 +562,31 @@ function mapItem(
         },
       ];
     }
-    case 'mcpToolCall':
-      return typeof item.server === 'string' && typeof item.tool === 'string'
-        ? [
-            {
-              threadId,
-              type: 'tool',
-              id,
-              phase,
-              text: `Mcp ${item.server}: ${item.tool}`,
-              mcp: { server: item.server, tool: item.tool },
-            },
-          ]
-        : [];
+    case 'mcpToolCall': {
+      if (typeof item.server !== 'string' || typeof item.tool !== 'string')
+        return [];
+      const input = phase === 'start' ? capInput(item.arguments) : undefined;
+      const error = obj(item.error)?.message;
+      const output =
+        phase === 'end'
+          ? typeof error === 'string'
+            ? error
+            : mcpResultText(item.result)
+          : undefined;
+      return [
+        {
+          threadId,
+          type: 'tool',
+          id,
+          phase,
+          text: `Mcp ${item.server}: ${item.tool}`,
+          mcp: { server: item.server, tool: item.tool },
+          ...(input && { input }),
+          ...(phase === 'end' && item.status === 'failed' && { isError: true }),
+          ...(output && { output: output.slice(-OUTPUT_MAX) }),
+        },
+      ];
+    }
     case 'webSearch': {
       const { text, links } = webSearch(item);
       return [
@@ -1030,4 +1043,13 @@ export function codexModels(result: unknown): AgentModel[] {
       },
     ];
   });
+}
+
+/** An MCP result's text blocks (codex-cli 0.167.0 `McpToolCallResult.content`); other block kinds are left out. */
+function mcpResultText(result: unknown) {
+  const content = obj(result)?.content;
+  if (!Array.isArray(content)) return undefined;
+  return content
+    .flatMap((c) => (typeof obj(c)?.text === 'string' ? [obj(c)!.text] : []))
+    .join('\n');
 }

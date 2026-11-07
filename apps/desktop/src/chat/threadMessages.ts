@@ -1,19 +1,22 @@
 import type { ActivityEntry, Thread, ThreadRef } from '../model.ts';
-import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
+import { isMessageTool, MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 
-export const isSendCall = (entry: Pick<ActivityEntry, 'mcp'>) =>
-  entry.mcp?.server === MOCHI_SERVER && entry.mcp.tool === 'send_to_thread';
+/** A call that messages another agent: `send_to_thread`, or a sub-thread's `report_to_parent`. */
+export const isMessageCall = (entry: Pick<ActivityEntry, 'mcp'>) =>
+  entry.mcp?.server === MOCHI_SERVER && isMessageTool(entry.mcp.tool);
 
 /** The same call from its logged text alone (`Mcp mochi: send_to_thread`, as `parseTool` splits it). */
-export const isSendTarget = (call: { verb: string; target: string }) =>
-  call.verb === 'Mcp' && call.target === `${MOCHI_SERVER}: send_to_thread`;
+export const isMessageTarget = (call: { verb: string; target: string }) =>
+  call.verb === 'Mcp' &&
+  call.target.startsWith(`${MOCHI_SERVER}: `) &&
+  isMessageTool(call.target.slice(MOCHI_SERVER.length + 2));
 
 /** What the receiving agent reads: the message with its sender, so it knows who wrote it. */
 export const receivedPrompt = (from: ThreadRef, text: string) =>
   `From "${from.title}": ${text}`;
 
 /**
- * The sender's `send_to_thread` row learns what it delivered: the newest such call without a message yet.
+ * The sender's messaging row (`send_to_thread`, `report_to_parent`) learns what it delivered: the newest such call without a message yet.
  * GAP: matched by order, not call id (the tool runs without its call id); a call whose start event arrives after it ran keeps the generic row.
  */
 export function markSent(
@@ -21,7 +24,7 @@ export function markSent(
   sent: ThreadRef & { text: string },
 ): Thread {
   const i = thread.activity.findLastIndex(
-    (e) => e.kind === 'tool' && isSendCall(e) && !e.sent,
+    (e) => e.kind === 'tool' && isMessageCall(e) && !e.sent,
   );
   if (i < 0) return thread;
   return {

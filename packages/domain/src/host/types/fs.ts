@@ -30,6 +30,12 @@ export interface FsHost {
   ): Promise<void>;
   /** Selects `path` in Finder (Explorer, the file manager); an empty `path` reveals `root` itself. */
   reveal(root: string, path: string): Promise<void>;
+  /** The file's size in bytes at an absolute `path`; null when it isn't a file. */
+  size(path: string): Promise<number | null>;
+  /** Opens an absolute `path` with its default app, as a double-click in Finder would. */
+  open(path: string): Promise<void>;
+  /** The OS's icon for a file named `name` (by its extension), as a PNG data URL; null when the OS has none to give. */
+  fileIcon(name: string): Promise<string | null>;
   /** The OS folder picker, opened at `defaultPath` (`~` allowed); null when dismissed. The web build only learns the folder's name. */
   pickFolder(defaultPath?: string): Promise<string | null>;
   /** The folder at `path` (`~` allowed) as an absolute path with its subfolders' names, hidden ones left out; null when it isn't a folder. */
@@ -95,6 +101,9 @@ export const fsMethods = {
   editors: 'invoke',
   openIn: 'invoke',
   reveal: 'invoke',
+  size: 'invoke',
+  open: 'invoke',
+  fileIcon: 'invoke',
   pickFolder: 'invoke',
   folders: 'invoke',
   entries: 'invoke',

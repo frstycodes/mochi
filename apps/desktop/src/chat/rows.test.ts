@@ -75,6 +75,30 @@ test("Mochi's approval widgets stay their own row mid-turn; the turn's later wor
   );
 });
 
+test('files the agent sent stay their own row mid-turn, never folded into its work group', () => {
+  const sent: ActivityEntry = {
+    ...e('event', 'claude', 'Claude sent 2 files'),
+    attachments: {
+      files: [
+        { path: '/r/shot.png', size: 1 },
+        { path: '/r/demo.mp4', size: 2 },
+      ],
+    },
+  };
+  const rows = chatRows([
+    e('message', 'you', 'record a demo'),
+    e('tool', 'claude', 'Run pnpm e2e'),
+    sent,
+    e('tool', 'claude', 'Mcp mochi: send_files'),
+    e('message', 'claude', 'Here it is.'),
+  ]);
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    ['message', 'work', 'event', 'work', 'message'],
+  );
+  assert.equal(rows[2].kind === 'event' && rows[2].entry, sent);
+});
+
 test('a turn of tools, prose, tools, prose, tools makes three groups in place', () => {
   assert.deepEqual(
     shape([
@@ -450,5 +474,36 @@ test('reports logged back to back share one card; anything between them starts a
       report('c'),
     ]),
     ['reports(a, b)', 'Merging a.', 'reports(c)'],
+  );
+});
+
+test('a Mochi call its own widget draws gets no row, unless it failed; lines a widget already shows are never drawn', () => {
+  const mochi = (
+    tool: string,
+    extra: Partial<ActivityEntry> = {},
+  ): ActivityEntry => ({
+    ...e('tool', 'claude', `Mcp mochi: ${tool}`),
+    mcp: { server: 'mochi', tool },
+    ...extra,
+  });
+  assert.deepEqual(
+    shape([
+      e('message', 'you', 'go'),
+      e('tool', 'claude', 'Read a.ts'),
+      mochi('create_thread'),
+      mochi('wrap_up'),
+      mochi('start_subagent', { isError: true }),
+      mochi('send_to_thread'),
+      mochi('report_to_parent'),
+      e('event', 'claude', 'Claude wrapped up the turn'),
+      e('event', 'claude', 'Claude messaged "Admin usage"'),
+      e('event', 'harness', 'Sent the sub-thread reports to the agent'),
+      e('message', 'claude', 'done'),
+    ]),
+    [
+      'go',
+      'work(Read a.ts, Mcp mochi: start_subagent, Mcp mochi: send_to_thread, Mcp mochi: report_to_parent)',
+      'done',
+    ],
   );
 });

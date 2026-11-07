@@ -97,6 +97,7 @@ import { verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
 import { SteerBlock } from './sections/steer';
 import { SubReportsBlock } from './sections/sub-reports';
+import { WorkLogDetailBlock } from './sections/work-log-detail';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { TiltedDragBlock } from './sections/tilted-drag';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
@@ -1115,6 +1116,10 @@ function Recipes() {
         <SteerBlock />
         <SubThreadsBlock rl={rl} />
         <SubReportsBlock rl={rl} />
+        <WorkLogDetailBlock
+          rl={rl}
+          parent={state.threads.find((t) => t.id !== rl.id) ?? rl}
+        />
         <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
         <MergeButtonBlock />

@@ -114,9 +114,9 @@ export const TOOL_GUIDE = {
   },
   report_to_parent: {
     group: 'Progress',
-    label: 'Report to the parent thread',
+    label: 'Message the parent thread',
     description:
-      'A sub-thread ends each turn with a short report to the thread that started it: done, blocked, needs input or failed, with its branch, PR, files and checks.',
+      'A sub-thread ends each turn by messaging the thread that started it: done, blocked, needs input or failed, with its branch, PR, files and checks.',
   },
 
   update_plan: {
@@ -307,6 +307,12 @@ export const TOOL_GUIDE = {
     label: 'Hand you to the settings chat',
     description:
       'Draft a request about Mochi’s own settings in Settings › Ask Mochi, with a toast to open it. Only the settings chat can read or suggest settings.',
+  },
+  send_files: {
+    group: 'Reaching you',
+    label: 'Send you files',
+    description:
+      'Show you images, videos and other files in the thread, to view there or open in their own app. Reads nothing new and changes nothing.',
   },
   notify_user: {
     group: 'Reaching you',

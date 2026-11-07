@@ -85,6 +85,10 @@ const project = (name: string, isMissing = false) =>
     isMissing,
   }) as Project;
 const PROJECTS = [project('api'), project('web'), project('gone', true)];
+const FILE_SIZES: Record<string, number> = {
+  '/repo/rl/out/shot.png': 2048,
+  '/tmp/demo.mp4': 9_000_000,
+};
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
 function setup({
@@ -260,6 +264,7 @@ function setup({
     },
     projects: async () => PROJECTS,
     cwdOf: () => '/repo/rl',
+    fileSize: async (path) => FILE_SIZES[path] ?? null,
     models: async () => CLAUDE_DEMO_MODELS,
     askSecondOpinion: async () => 'codex',
     profiles: {
@@ -1223,12 +1228,45 @@ test('thread changes log in the caller without a toast', async () => {
 
 test('quiet tools log but never toast', async () => {
   const t = setup();
-  await t.ok('wrap_up', {
-    recap: 'Kept the cookie name.',
-    decisions: [],
-  });
+  await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
   assert.equal(t.toasts.length, 0);
-  assert.equal(lastLog(t.thread('rl')), 'Claude wrapped up the turn');
+  assert.match(lastLog(t.thread('rl')), /^Claude renamed /);
+});
+
+test('a call whose widget or messaging row records it logs no line of its own', async () => {
+  const t = setup();
+  const before = lastLog(t.thread('rl'));
+  await t.ok('wrap_up', { recap: 'Kept the cookie name.', decisions: [] });
+  await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new table' });
+  assert.equal(lastLog(t.thread('rl')), before);
+  Object.assign(t.thread('adm'), { parent: { threadId: 'rl' } });
+  const subBefore = lastLog(t.thread('adm'));
+  await t.ok('report_to_parent', { status: 'done', summary: 'Done' }, 'adm');
+  assert.equal(lastLog(t.thread('adm')), subBefore);
+});
+
+test("report_to_parent's row reads as a message to the parent, like send_to_thread's", async () => {
+  const t = setup();
+  Object.assign(t.thread('adm'), { parent: { threadId: 'rl' } });
+  t.env.dispatch({
+    type: 'say',
+    threadId: 'adm',
+    entry: {
+      who: 'claude',
+      kind: 'tool',
+      text: 'Mcp mochi: report_to_parent',
+      mcp: { server: 'mochi', tool: 'report_to_parent' },
+    },
+  });
+  await t.ok(
+    'report_to_parent',
+    { status: 'done', summary: ' Shipped ' },
+    'adm',
+  );
+  assert.deepEqual(
+    t.thread('adm').activity.findLast((a) => a.kind === 'tool')!.sent,
+    { threadId: 'rl', title: t.thread('rl').title, text: 'Shipped' },
+  );
 });
 
 test('another profile is out of reach and bad args are errors, not throws', async () => {
@@ -1473,6 +1511,35 @@ test('send_to_thread sends into the other thread as a message from this one, wit
     "the sender's call row knows what it sent",
   );
   assert.equal(t.toasts.length, 0);
+});
+
+test('send_files logs the files, resolved against the worktree and sized, as one row with its caption, at any agent setting', async () => {
+  const t = setup({ control: 'read' });
+  const r = await t.ok('send_files', {
+    paths: ['out/../out/shot.png', '/tmp/demo.mp4'],
+    caption: ' Before and after ',
+  });
+  assert.deepEqual(r.sent, ['/repo/rl/out/shot.png', '/tmp/demo.mp4']);
+  const row = t.thread('rl').activity.at(-1)!;
+  assert.equal(row.kind, 'event');
+  assert.match(row.text, /sent 2 files$/);
+  assert.deepEqual(row.attachments, {
+    files: [
+      { path: '/repo/rl/out/shot.png', size: 2048 },
+      { path: '/tmp/demo.mp4', size: 9_000_000 },
+    ],
+    caption: 'Before and after',
+  });
+  assert.equal(t.toasts.length, 0);
+  assert.match(
+    await t.err('send_files', { paths: ['/repo/rl/out/shot.png', 'gone.txt'] }),
+    /\/repo\/rl\/gone\.txt is not a file/,
+  );
+  assert.equal(
+    t.thread('rl').activity.at(-1),
+    row,
+    'one missing file sends none',
+  );
 });
 
 test('delete_thread with approval removes the thread everywhere, and the worktree only when ticked', async () => {
