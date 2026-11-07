@@ -54,9 +54,25 @@ test('a restart finds the worktree its title moved, by its branch', async () => 
     dir: moved,
     isNew: false,
   });
+  assert.deepEqual(
+    await createWorktree(repo, 'new-2', 'mochi/fix-login', {
+      isExisting: true,
+    }),
+    { dir: moved, isNew: false },
+  );
+  const external = join(root, 'external');
+  git('-C', repo, 'worktree', 'add', '-b', 'external', external);
+  writeFileSync(join(external, 'a.txt'), 'uncommitted\n');
+  assert.deepEqual(
+    await createWorktree(repo, 'new-3', 'external', { isExisting: true }),
+    { dir: external, isNew: false },
+  );
+  assert.deepEqual(
+    await createWorktree(repo, 'new-4', 'main', { isExisting: true }),
+    { dir: repo, isNew: false },
+  );
   await assert.rejects(
-    createWorktree(repo, 'new-2', 'mochi/fix-login', { isExisting: true }),
-    /mochi\/fix-login/,
-    "a branch you picked that another thread's worktree has is refused, not shared",
+    createWorktree(repo, 'new-5', 'external', { isNew: true }),
+    /external/,
   );
 });
