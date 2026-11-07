@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises';
 import { Effect, Stream } from 'effect';
 import { project } from '@mochi/domain';
 import type { ToolName } from '@mochi/domain/runtime/toolTable';
@@ -34,6 +35,7 @@ export const CORE_TOOLS = new Set<ToolName>([
   'create_thread',
   'dismiss_thread_proposal',
   'send_to_thread',
+  'send_files',
   'wrap_up',
   'report_to_parent',
   'update_plan',
@@ -116,6 +118,11 @@ function coreEnv(
     browser: unavailable('The browser'),
     projects: absent('Listing projects'),
     cwdOf: (thread) => thread.live?.cwd ?? null,
+    fileSize: (path) =>
+      stat(path).then(
+        (file) => (file.isFile() ? file.size : null),
+        () => null,
+      ),
     models: (provider, spaceId) =>
       agent.models(undefined, provider, spaceId).catch(() => []),
     profiles: {

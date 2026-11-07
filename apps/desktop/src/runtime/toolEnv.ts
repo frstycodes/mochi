@@ -53,6 +53,7 @@ export function toolEnv(
         getState().threads.filter((t) => t.spaceId === spaceId),
       ),
     cwdOf: threadCwd,
+    fileSize: (path) => host.fs.size(path),
     models: (provider, spaceId) =>
       host.agent.models(provider, spaceId).catch(() => []),
     profiles: {

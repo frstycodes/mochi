@@ -842,6 +842,23 @@ export const TOOL_TABLE = {
       "Open your thread's side chat and ask it a question for the user, answered by a separate model that sees this thread. The answer is for the user; it isn't returned to you.",
     shape: { question: Schema.String.check(Schema.isMinLength(1)) },
   },
+  send_files: {
+    tier: 'read',
+    description:
+      'Show the user files in the transcript: images as thumbnails, videos with a player, anything else as a file they can open. For what you made or found that they should see or keep (a screenshot, a recording, an export); not for files they can already see in the diff.',
+    shape: {
+      paths: Schema.Array(Schema.String.check(Schema.isMinLength(1)))
+        .check(Schema.isMinLength(1), Schema.isMaxLength(20))
+        .annotate({
+          description: 'Absolute, or relative to your working directory',
+        }),
+      caption: Schema.optionalKey(
+        Schema.String.check(Schema.isMaxLength(300)).annotate({
+          description: 'One line under the files, like "Before and after"',
+        }),
+      ),
+    },
+  },
   notify_user: {
     tier: 'change',
     quiet: true,
