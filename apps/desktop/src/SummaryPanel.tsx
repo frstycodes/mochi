@@ -1,6 +1,7 @@
 import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { Card } from '@/components/ui/card';
 import { persistedFamily, persistedSlice } from './lib/uiStorage.ts';
+import { useWithoutStreamedText } from './chat/useWithoutStreamedText.ts';
 import {
   isValidElement,
   useRef,
@@ -148,6 +149,8 @@ export function SummaryPanel({
   variant?: 'floating' | 'flat';
   onPaneOpened?: () => void;
 }) {
+  // Nothing here shows the reply being written, and summing up a long thread's activity each streamed batch costs a render.
+  const shown = useWithoutStreamedText(thread);
   return (
     <aside
       aria-label="Thread summary"
@@ -155,7 +158,7 @@ export function SummaryPanel({
       className={cn('group/summary flex min-h-0 flex-col', className)}
     >
       <ScrollArea className="min-h-0 flex-1">
-        <SummaryBody thread={thread} onPaneOpened={onPaneOpened} />
+        <SummaryBody thread={shown} onPaneOpened={onPaneOpened} />
       </ScrollArea>
     </aside>
   );

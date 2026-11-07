@@ -70,8 +70,8 @@ export const MOCHI_FLAVORS = {
 export type MochiFlavor = keyof typeof MOCHI_FLAVORS;
 
 type Frame = ReturnType<typeof poseAttributes> & { props: Shape[][] };
-const IDLE = PHASES.indexOf('idle');
 const IDLE_FRAME_MS = 1000 / 30;
+const SETTLED_FRAME_MS = 1000 / 60;
 
 /** Mochi, the logo's dome, acting out each phase with a prop (zzz, thought cloud, book, pencil, lens, question); phases blend instead of cutting. */
 export function AgentLoader({
@@ -119,9 +119,11 @@ export function AgentLoader({
       phase,
       Math.min(delta, 100) / 1000,
     );
-    // Settled idle is a slow breath: 30fps reads the same as 120 and repaints (and re-runs the backdrop blurs) a quarter as often.
-    const isSettledIdle = phase === 'idle' && morph.weights[IDLE] > 0.999;
-    if (isSettledIdle && time - paintedAt.current < IDLE_FRAME_MS) return;
+    // Every painted frame costs a layout and re-layering of the whole page, so a settled pose paints at a capped rate: idle is a slow
+    // breath, where 30fps reads the same as 120; the other phases move faster and get 60. Blending between phases paints every frame.
+    const isSettled = morph.weights[PHASES.indexOf(phase)] > 0.999;
+    const frameMs = phase === 'idle' ? IDLE_FRAME_MS : SETTLED_FRAME_MS;
+    if (isSettled && time - paintedAt.current < frameMs) return;
     paintedAt.current = time;
     paint(
       { shadow, body, eye, glint, props },

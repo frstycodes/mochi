@@ -17,6 +17,16 @@ let nextId = 0;
 const emitAsk = (event: AgentAskEvent) =>
   askListeners.forEach((listener) => listener(event));
 
+// GAP: perf fixture, like `?long=`. `?perf` lets a benchmark stream agent events (message deltas) into the web build, which has no agent.
+if (
+  typeof location !== 'undefined' &&
+  new URLSearchParams(location.search).has('perf')
+)
+  Object.assign(globalThis, {
+    __emitAgentEvent: (event: AgentEvent) =>
+      listeners.forEach((listener) => listener(event)),
+  });
+
 // GAP: no runtime in the web build; threads run on the demo adapter (src/runtime/demo.ts), so these only end the turn.
 const endTurn = async (threadId: string) => {
   setTimeout(

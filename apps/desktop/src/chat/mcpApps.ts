@@ -1,5 +1,8 @@
 import type { McpUiResourceCsp } from '@modelcontextprotocol/ext-apps/app-bridge';
 
+/** An MCP App view's height before it reports its size. */
+export const START_HEIGHT = 160;
+
 // A source the server names goes into the policy as is; anything that could close the directive or the attribute is dropped.
 const SOURCE = /^[a-z0-9*.:/_-]+$/i;
 

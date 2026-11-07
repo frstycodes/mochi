@@ -41,6 +41,7 @@ import {
   type Thread,
 } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
+import { useWithoutStreamedText } from './chat/useWithoutStreamedText';
 import { PlanRow } from './chat/PlanRow';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
@@ -62,7 +63,6 @@ import {
   useSharedLayout,
 } from './Composer';
 import { useSplit } from './layout/SplitContext';
-import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
 import { SetupRow } from './chat/SetupRow';
 import { useLibraryNames } from './library/names';
@@ -105,7 +105,7 @@ import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
 import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
-import { useThreadPins, type Pin } from './chat/pins';
+import { useThreadPins } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { useRemoteMachine } from './remote/origin';
 import { LimitEntry, LimitHint } from './chat/LimitCard';
@@ -164,7 +164,6 @@ import {
   Transcript,
   TranscriptScrollButton,
   useTranscript,
-  type TranscriptHandle,
 } from './chat/Transcript';
 
 export type MessageBar = ComponentType<{
@@ -249,10 +248,10 @@ export function ChatView({
     projectRef(thread.repo),
     thread.agent,
   );
-  const transcript = useRef<TranscriptHandle | null>(null);
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
   // The composer's own: a message taken back returns there with its mentions and images.
   const restoreDraft = useRef<((message: QueuedMessage) => void) | null>(null);
+  // Nothing in the composer depends on the reply being written, and its subtree is the chat's largest after the transcript.
   const composerThread = useWithoutStreamedText(thread);
 
   return (
@@ -275,7 +274,6 @@ export function ChatView({
         >
           <VizThreadProvider value={thread.id}>
             <Transcript
-              ref={transcript}
               threadId={thread.id}
               rows={rows}
               remembered={remembered}
@@ -333,15 +331,6 @@ export function ChatView({
               {!isReadOnly && (
                 <SelectionPin threadId={thread.id} scope={messages} />
               )}
-              <ThreadMinimap
-                items={outline(rows, pins)}
-                onJump={(rowIndex) =>
-                  transcript.current?.scrollToIndex(rowIndex, {
-                    align: 'start',
-                  })
-                }
-                className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex"
-              />
               {!isReadOnly && (
                 <ScrollIntent
                   onScrollUp={() => {
@@ -382,20 +371,6 @@ export function ChatView({
       </div>
     </PromptInputProvider>
   );
-}
-
-/**
- * `thread`, or the one already shown while only the text of its entries grew (`isStreamedOnly`, no entry added): nothing in the
- * composer depends on the reply being written, and its subtree is the chat's largest after the transcript.
- */
-function useWithoutStreamedText(thread: Thread) {
-  const [held, setHeld] = useState(thread);
-  const isSame =
-    held === thread ||
-    (isStreamedOnly(held, thread) &&
-      held.activity.length === thread.activity.length);
-  if (!isSame) setHeld(thread);
-  return isSame ? held : thread;
 }
 
 /**
@@ -743,24 +718,6 @@ function AgentReply({
 /** The anchor turn's file changes, as their own card after the turn and never inside its report. Older turns' edits stay in the work log. */
 function shownTurnChanges(anchor: TurnAnchor | undefined) {
   return anchor?.changes ? [anchor.changes] : [];
-}
-
-/** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */
-function outline(rows: ChatRow[], pins: Pin[]): OutlineItem[] {
-  return rows.flatMap((row, rowIndex) => {
-    if (row.kind !== 'message' || row.entry.who !== 'you') return [];
-    const pinned = pins
-      .filter((p) => p.index === row.index)
-      .map((p) => p.text || row.entry.text);
-    return [
-      {
-        rowIndex,
-        text: row.entry.text,
-        time: clock(row.entry.at),
-        pins: pinned,
-      },
-    ];
-  });
 }
 
 /** Reading back through the chat folds the question tray away; returning to the latest message brings it back. */

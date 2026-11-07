@@ -119,7 +119,7 @@ import { OverlaysSection } from './sections/overlays';
 import { ImagesSection } from './sections/images';
 import { EmbedsSection } from './sections/embeds';
 import { NativeItemsSection } from './sections/native-items';
-import { McpAppFrame } from '../chat/McpAppCard';
+import { McpAppFrame } from '../chat/McpAppFrame';
 import { EmbedFrame } from '../viz/EmbedFrame';
 import { MOBBIN_RESOURCE, MOBBIN_WIDGET } from './mcpAppFixtures';
 import { PhotoViewer } from '../photo/PhotoViewer';
