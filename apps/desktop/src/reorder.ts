@@ -1,8 +1,8 @@
-import { isListed, isStreamedOnly, PIN_SLOTS, type Thread } from './model.ts';
+import { isListed, isStreamedOnly, MAX_PINS, type Thread } from './model.ts';
 import { settledMsOf } from './settled/settled.ts';
 
 /**
- * Sidebar drag and drop: pinned threads take Orbit slots in list order, both lists keep the dropped order, threads not listed
+ * Sidebar drag and drop: both lists keep the dropped order, threads not listed
  * stay where they were. Pins keep their order keys where the new order allows, so they stay put among your other computers'
  * pins (`pinKeys`); `at` (epoch ms) is the key a brand-new pin at the end takes.
  */
@@ -12,7 +12,7 @@ export function reorderThreads(
   unpinned: string[],
   at: number,
 ): Thread[] {
-  if (pinned.length > PIN_SLOTS.length) return threads;
+  if (pinned.length > MAX_PINS) return threads;
   const order = [...pinned, ...unpinned];
   const rank = (t: Thread) => order.indexOf(t.id);
   const keys = pinKeys(
@@ -24,38 +24,23 @@ export function reorderThreads(
     .sort((a, b) => rank(a) - rank(b))
     .map((t) => {
       const i = pinned.indexOf(t.id);
-      return {
-        ...t,
-        orbitSlot: i >= 0 ? PIN_SLOTS[i] : undefined,
-        pinOrder: i >= 0 ? keys[i] : undefined,
-      };
+      return { ...t, pinOrder: i >= 0 ? keys[i] : undefined };
     });
   let i = 0;
   return threads.map((t) => (rank(t) >= 0 ? moved[i++] : t));
 }
-
-/**
- * One order across your computers' pins: each machine keeps its own threads' keys, and the sidebar sorts every pin by key.
- * A pin from before keys falls back to its Orbit slot, so it sorts first.
- */
-export const pinOrderOf = (thread: Pick<Thread, 'pinOrder' | 'orbitSlot'>) =>
-  thread.pinOrder ?? thread.orbitSlot ?? 0;
 
 /** Keys for `pinned` in that order, changing as few as it can: a key that still fits stays, one that doesn't moves just past its neighbour. */
 function pinKeys(pinned: (Thread | undefined)[], at: number) {
   const keys: number[] = [];
   pinned.forEach((thread, i) => {
     const prev = keys[i - 1];
-    const own =
-      thread &&
-      (thread.pinOrder !== undefined || thread.orbitSlot !== undefined)
-        ? pinOrderOf(thread)
-        : undefined;
+    const own = thread?.pinOrder;
     if (own !== undefined && (prev === undefined || own > prev))
       return keys.push(own);
     const next = pinned
       .slice(i + 1)
-      .map((t) => t && (t.pinOrder ?? t.orbitSlot))
+      .map((t) => t?.pinOrder)
       .find((k) => k !== undefined && (prev === undefined || k > prev));
     keys.push(orderBetween(prev, next, own === undefined ? at : undefined));
   });
@@ -75,8 +60,7 @@ export function orderBetween(
 }
 
 /**
- * Pins `id` (or moves its pin) to order key `order` among all your computers' pins; this space's Orbit slots follow its pins
- * in key order. Null when Pinned is full.
+ * Pins `id` (or moves its pin) to order key `order` among all your computers' pins. Null when Pinned is full.
  */
 export function pinAt(
   threads: Thread[],
@@ -87,29 +71,20 @@ export function pinAt(
   const target = threads.find((t) => t.id === id);
   if (!target) return threads;
   const others = pinnedThreads(threads, spaceId).filter((t) => t.id !== id);
-  if (target.orbitSlot === undefined && others.length >= PIN_SLOTS.length)
-    return null;
-  const pins = [...others, { ...target, pinOrder: order }].sort(
-    (a, b) => pinOrderOf(a) - pinOrderOf(b),
-  );
-  return threads.map((t) => {
-    const i = pins.findIndex((p) => p.id === t.id);
-    return i >= 0
-      ? { ...t, orbitSlot: PIN_SLOTS[i], pinOrder: pinOrderOf(pins[i]) }
-      : t;
-  });
+  if (target.pinOrder === undefined && others.length >= MAX_PINS) return null;
+  return threads.map((t) => (t.id === id ? { ...t, pinOrder: order } : t));
 }
 
-/** A space's pinned threads in pin order: the order behind Orbit slots, mod 1–9 and the pinned pager. */
+/** A space's pinned threads in pin order: the order behind mod 1–9 and the pinned pager. */
 export function pinnedThreads(threads: Thread[], spaceId: string) {
   return threads
     .filter(
       (t) =>
         t.spaceId === spaceId &&
-        t.orbitSlot !== undefined &&
+        t.pinOrder !== undefined &&
         t.status !== 'settled',
     )
-    .sort((a, b) => a.orbitSlot! - b.orbitSlot!);
+    .sort((a, b) => a.pinOrder! - b.pinOrder!);
 }
 
 /**
@@ -133,7 +108,7 @@ export function activeThreads(threads: Thread[], spaceId: string) {
     .filter(
       (t) =>
         t.spaceId === spaceId &&
-        t.orbitSlot === undefined &&
+        t.pinOrder === undefined &&
         t.status !== 'settled' &&
         isListed(t),
     )
@@ -243,7 +218,7 @@ export function togglePin(threads: Thread[], spaceId: string, id: string) {
       pinned: pinned.filter((p) => p !== id),
       unpinned: [id, ...unpinned],
     };
-  if (pinned.length >= PIN_SLOTS.length) return null;
+  if (pinned.length >= MAX_PINS) return null;
   return {
     pinned: [...pinned, id],
     unpinned: unpinned.filter((u) => u !== id),
@@ -275,7 +250,7 @@ export function stepPin(
   step: 1 | -1,
 ) {
   if (!pinned.includes(id))
-    return step === -1 && pinned.length < PIN_SLOTS.length
+    return step === -1 && pinned.length < MAX_PINS
       ? { pinned: [...pinned, id], unpinned: unpinned.filter((u) => u !== id) }
       : null;
   const i = pinned.indexOf(id);
@@ -305,7 +280,7 @@ export function dropPin(
   const u = unpinned.filter((x) => x !== id);
   const target = toPinned ? p : u;
   target.splice(Math.min(index, target.length), 0, id);
-  if (p.length > PIN_SLOTS.length) return null;
+  if (p.length > MAX_PINS) return null;
   return { pinned: p, unpinned: u };
 }
 

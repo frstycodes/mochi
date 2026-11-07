@@ -1,6 +1,6 @@
 import type { Project } from '@mochi/domain/host/types/projects';
-import { PIN_SLOTS, type Repo, type Thread } from '../model.ts';
-import { pinAt, pinOrderOf, reorderThreads } from '../reorder.ts';
+import { MAX_PINS, type Repo, type Thread } from '../model.ts';
+import { pinAt, reorderThreads } from '../reorder.ts';
 import type { Action } from '../store/index.tsx';
 import type { State } from '../store/types.ts';
 import { parseRemoteThreadId } from './ids.ts';
@@ -42,8 +42,8 @@ export function projectMap(
 
 /**
  * Every computer's threads as this one lists them. Another computer's go in the profile with its profile's id, else `fallbackSpaceId`;
- * in this computer's clone of their project when there is one; pinned only by this screen's `pins`. Pins then take Orbit slots per
- * profile in key order (`pinOrderOf`), this computer's first among equal keys; past the last slot one isn't pinned here.
+ * in this computer's clone of their project when there is one; pinned only by this screen's `pins`. Pins then sort per
+ * profile by key, this computer's first among equal keys; past `MAX_PINS` one isn't pinned here.
  */
 export function mergeThreads(
   local: readonly Thread[],
@@ -61,32 +61,28 @@ export function mergeThreads(
         ...t,
         spaceId: spaceIds.includes(t.spaceId) ? t.spaceId : fallbackSpaceId,
         repo: t.repo && here ? { ...t.repo, ...here } : t.repo,
-        // Its own computer's pin stays there; the slot is set below.
-        orbitSlot: order === undefined ? undefined : 0,
+        // Its own computer's pin stays there.
         pinOrder: order,
       };
     }),
   );
   if (remote.length === 0) return [...local];
   const threads = [...local, ...remote];
-  const slots = new Map<string, number | undefined>();
+  const overflow = new Set<string>();
   for (const spaceId of new Set(threads.map((t) => t.spaceId)))
     threads
       .filter(
         (t) =>
           t.spaceId === spaceId &&
-          t.orbitSlot !== undefined &&
+          t.pinOrder !== undefined &&
           t.status !== 'settled',
       )
-      .sort((a, b) => pinOrderOf(a) - pinOrderOf(b))
-      .forEach((t, i) => slots.set(t.id, PIN_SLOTS[i]));
-  return threads.map((t) => {
-    if (!slots.has(t.id)) return t;
-    const slot = slots.get(t.id);
-    return slot === undefined
-      ? { ...t, orbitSlot: undefined, pinOrder: undefined }
-      : { ...t, orbitSlot: slot };
-  });
+      .sort((a, b) => a.pinOrder! - b.pinOrder!)
+      .slice(MAX_PINS)
+      .forEach((t) => overflow.add(t.id));
+  return threads.map((t) =>
+    overflow.has(t.id) ? { ...t, pinOrder: undefined } : t,
+  );
 }
 
 const isRemote = (id: string) => !!parseRemoteThreadId(id);
@@ -101,7 +97,7 @@ export function reorderAcross(
   pins: readonly RemotePin[],
 ): { local: Action[]; pins: RemotePin[] } | null {
   const { pinned, unpinned, at } = action;
-  if (pinned.length > PIN_SLOTS.length) return null;
+  if (pinned.length > MAX_PINS) return null;
   const after = reorderThreads(merged, pinned, unpinned, at);
   const keyOf = (id: string) => after.find((t) => t.id === id)?.pinOrder;
   const local: Action[] = [

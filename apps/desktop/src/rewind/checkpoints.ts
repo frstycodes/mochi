@@ -332,7 +332,7 @@ function restore(
     ),
     title: current.title,
     line: current.line,
-    orbitSlot: current.orbitSlot,
+    pinOrder: current.pinOrder,
     providers: current.providers,
     session: current.session,
     live: current.live && liveAfterRewind(current, base, forkAt),

@@ -17,7 +17,6 @@ import {
   pinAt,
   pinMany,
   pinnedThreads,
-  pinOrderOf,
   reorderThreads,
   settledThreads,
   sidebarGroups,
@@ -25,31 +24,31 @@ import {
   togglePin,
 } from './reorder.ts';
 
-const t = (id: string, orbitSlot?: number, lastAt = 0) =>
+const t = (id: string, pinOrder?: number, lastAt = 0) =>
   ({
     id,
-    orbitSlot,
+    pinOrder,
     spaceId: 's',
     status: 'running',
     startedAt: 0,
     activity: lastAt ? [{ at: lastAt }] : [],
   }) as unknown as Thread;
 
-test('reorders listed threads in place and assigns pin slots in order', () => {
+test('reorders listed threads in place and keys pins in order', () => {
   const threads = [t('a', 1), t('other'), t('b'), t('c', 2)];
   const out = reorderThreads(threads, ['c', 'b'], ['a'], 1000);
   assert.deepEqual(
-    out.map((x) => [x.id, x.orbitSlot]),
+    out.map((x) => [x.id, x.pinOrder]),
     [
-      ['c', 1],
+      ['c', 2],
       ['other', undefined],
-      ['b', 2],
+      ['b', 1000],
       ['a', undefined],
     ],
   );
 });
 
-test('refuses more pins than Orbit has slots', () => {
+test('refuses more pins than Pinned holds', () => {
   const threads = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => t(id));
   assert.equal(
     reorderThreads(threads, ['a', 'b', 'c', 'd', 'e', 'f'], [], 1000),
@@ -57,7 +56,7 @@ test('refuses more pins than Orbit has slots', () => {
   );
 });
 
-test('pinned order follows Orbit slots, not array order', () => {
+test('pinned order follows pin keys, not array order', () => {
   assert.deepEqual(
     pinnedThreads([t('a', 3), t('b'), t('c', 1)], 's').map((x) => x.id),
     ['c', 'a'],
@@ -284,11 +283,8 @@ test('a drag reorders top-level rows by height, a group counted with its sub-thr
   );
 });
 
-const keyed = (id: string, orbitSlot: number, pinOrder: number) =>
-  ({ ...t(id, orbitSlot), pinOrder }) as Thread;
-
 test('a reorder keeps pin keys where it can, so pins stay put among another computer’s; a new pin at the end goes last everywhere', () => {
-  const threads = [keyed('a', 1, 100), keyed('b', 2, 200), t('c')];
+  const threads = [t('a', 100), t('b', 200), t('c')];
   const appended = reorderThreads(threads, ['a', 'b', 'c'], [], 5000);
   assert.deepEqual(
     appended.map((x) => x.pinOrder),
@@ -296,11 +292,11 @@ test('a reorder keeps pin keys where it can, so pins stay put among another comp
   );
   const swapped = reorderThreads(threads, ['b', 'a'], ['c'], 5000);
   assert.deepEqual(
-    swapped.map((x) => [x.id, x.orbitSlot, x.pinOrder]),
+    swapped.map((x) => [x.id, x.pinOrder]),
     [
-      ['b', 1, 200],
-      ['a', 2, 201],
-      ['c', undefined, undefined],
+      ['b', 200],
+      ['a', 201],
+      ['c', undefined],
     ],
     'only the moved pin’s key changes, just past its neighbour',
   );
@@ -314,39 +310,32 @@ test('a reorder keeps pin keys where it can, so pins stay put among another comp
     ],
     'a new pin dropped first sorts before the old first',
   );
-  assert.equal(
-    pinOrderOf(t('legacy', 3)),
-    3,
-    'a pin from before keys sorts by its Orbit slot',
-  );
 });
 
-test('a pin moved between two of any computers’ pins takes the key between them; Orbit slots follow key order here', () => {
+test('a pin moved between two of any computers’ pins takes the key between them', () => {
   assert.equal(orderBetween(100, 200), 150);
   assert.equal(orderBetween(200, undefined, 5000), 5000);
   assert.equal(orderBetween(undefined, 100), 99);
-  const threads = [keyed('a', 1, 100), keyed('b', 2, 200), t('c')];
+  const threads = [t('a', 100), t('b', 200), t('c')];
   const moved = pinAt(threads, 's', 'b', 50)!;
   assert.deepEqual(
-    moved.map((x) => [x.id, x.orbitSlot, x.pinOrder]),
+    moved.map((x) => [x.id, x.pinOrder]),
     [
-      ['a', 2, 100],
-      ['b', 1, 50],
-      ['c', undefined, undefined],
+      ['a', 100],
+      ['b', 50],
+      ['c', undefined],
     ],
   );
   const added = pinAt(threads, 's', 'c', 150)!;
   assert.deepEqual(
-    added.map((x) => [x.id, x.orbitSlot]),
+    added.map((x) => [x.id, x.pinOrder]),
     [
-      ['a', 1],
-      ['b', 3],
-      ['c', 2],
+      ['a', 100],
+      ['b', 200],
+      ['c', 150],
     ],
   );
-  const full = [1, 2, 3, 5, 7].map((slot, i) =>
-    keyed(`p${i}`, slot, slot * 10),
-  );
+  const full = [1, 2, 3, 4, 5].map((n) => t(`p${n}`, n * 10));
   assert.equal(pinAt([...full, t('x')], 's', 'x', 1), null);
 });
 

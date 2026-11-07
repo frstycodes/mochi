@@ -25,7 +25,7 @@ export function MessageContextMenu({
       <ContextMenuTrigger
         render={children}
         className="select-text"
-        onPointerDown={leaveLongPressToOrbit}
+        onPointerDown={leaveLongPressToSelection}
       />
       <ContextMenuContent className="w-52">
         {actions.map((a) =>
@@ -49,7 +49,7 @@ export function MessageContextMenu({
   );
 }
 
-// Touch long-press on a message belongs to Orbit and the OS text selection; preventDefault stops Radix starting its own timer.
-function leaveLongPressToOrbit(e: PointerEvent) {
+// Touch long-press on a message belongs to the OS text selection; preventDefault stops Radix starting its own timer.
+function leaveLongPressToSelection(e: PointerEvent) {
   if (e.pointerType !== 'mouse') e.preventDefault();
 }

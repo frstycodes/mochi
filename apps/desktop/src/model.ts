@@ -518,8 +518,7 @@ export interface Thread {
   prs: PullRequest[];
   sources: Source[];
   context: { used: number; max: number };
-  orbitSlot?: number;
-  /** Where its pin sorts among all your computers' pins (`pinOrderOf`); unset while unpinned. */
+  /** Set while pinned: where its pin sorts among all your computers' pins. */
   pinOrder?: number;
   /** Hidden from Threads until then (wall-clock ms), or until it asks for you; set by Snooze. */
   snoozedUntil?: number | 'needs-you';
@@ -783,17 +782,6 @@ export const settingRef = (change: { key: string; profileId?: string }) =>
 export const isMochiCard = (item: QueueItem) =>
   !!item.tool || item.kind === 'setting';
 
-/** The options of a lone single-choice question, the only kind a number key can answer. */
-export function singleChoice(item: QueueItem) {
-  const [question, ...rest] = item.questions ?? [];
-  return question &&
-    !rest.length &&
-    !question.multiSelect &&
-    question.options.length
-    ? question.options
-    : null;
-}
-
 export function answerText(answers: string[][]) {
   return answers
     .filter((a) => a.length)
@@ -918,8 +906,7 @@ export interface Space {
   nativeNew?: Partial<Record<Provider, 'on' | 'off'>>;
 }
 
-// Orbit's outer ring keeps slots 0, 4 and 6 for Queue, Board and New thread; pinned threads take the rest, in order.
-export const PIN_SLOTS = [1, 2, 3, 5, 7];
+export const MAX_PINS = 5;
 
 export const NOW0 = 14 * 60 + 20;
 
@@ -977,7 +964,7 @@ function rateLimiting(): Thread {
     status: 'running',
     line: 1,
     startedAt: s,
-    orbitSlot: 1,
+    pinOrder: 1,
     steps: [
       step('rl1', 'Agree limit tiers per plan', {
         status: 'done',
@@ -1202,7 +1189,7 @@ function adminDashboard(): Thread {
     status: 'running',
     line: 2,
     startedAt: s,
-    orbitSlot: 2,
+    pinOrder: 2,
     steps: [
       step('ad1', 'Usage query endpoint', {
         status: 'done',
@@ -1470,7 +1457,7 @@ function authMigration(): Thread {
     status: 'review',
     line: 4,
     startedAt: s,
-    orbitSlot: 3,
+    pinOrder: 3,
     steps: [
       done('au1', 'Install and configure Better Auth', 0, 25),
       done('au2', 'Port email + password sign-in', 25, 70),
@@ -1599,7 +1586,7 @@ function simpleThread(
     status: 'running',
     line,
     startedAt: s,
-    orbitSlot: slot,
+    pinOrder: slot,
     steps: titles.map((t, i) => {
       const base = step(`${id}${i}`, t, { addedAt: s, addedBy: provider });
       if (i < doneCount)

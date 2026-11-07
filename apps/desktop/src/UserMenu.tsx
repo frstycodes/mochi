@@ -106,12 +106,6 @@ export function UserMenu({ isCompact = false }: { isCompact?: boolean }) {
             </DropdownMenuGroup>
           </>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="font-normal text-subtle-foreground">
-            Hold Option, or long-press, for Orbit
-          </DropdownMenuLabel>
-        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

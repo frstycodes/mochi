@@ -99,6 +99,7 @@ const LegacyStep = Schema.Struct({
 });
 const LegacyThread = Schema.Struct({
   ...Thread.fields,
+  orbitSlot: opt(Schema.Number),
   steps: Schema.Array(LegacyStep),
 });
 const LegacyCheckpoint = Schema.Struct({
@@ -118,8 +119,29 @@ const NO_V = { v: opt(Schema.Never) };
 type LegacyThread = typeof LegacyThread.Type;
 type LegacyQueueItem = typeof LegacyQueueItem.Type;
 
+/**
+ * A pin saved before pins stood alone was its `orbitSlot` (1–7, in pin order), with `pinOrder` only once pins had keys.
+ * GAP: a fork or nested sub-thread of a pinned thread kept its stale `pinOrder` without a slot, so it reads as pinned.
+ */
+function liftPin<T extends { orbitSlot?: number; pinOrder?: number }>({
+  orbitSlot,
+  ...thread
+}: T): Omit<T, 'orbitSlot'> {
+  return orbitSlot === undefined || thread.pinOrder !== undefined
+    ? thread
+    : { ...thread, pinOrder: orbitSlot };
+}
+
+/** A thread file's thread, reading an `orbitSlot` pin (`liftPin`). */
+const StoredThread = upgrade(
+  Schema.Struct({ ...Thread.fields, orbitSlot: opt(Schema.Number) }),
+  Thread,
+  (old) => liftPin(old) as never,
+  (current) => current as never,
+);
+
 const liftThread = (thread: LegacyThread): Thread => ({
-  ...thread,
+  ...liftPin(thread),
   steps: thread.steps.map((s) =>
     s.status === 'waiting'
       ? { ...s, status: 'ready' }
@@ -140,7 +162,7 @@ const liftQueue = (queue: readonly LegacyQueueItem[]): QueueItem[] =>
 /** One thread's JSON, stored whole as its `threads` row's `payload_json` in Core's SQLite. */
 const SavedThreadV1 = Schema.Struct({
   v: Schema.Literal(1),
-  thread: Thread,
+  thread: StoredThread,
   checkpoints: opt(Schema.Array(Checkpoint)),
   fork: opt(Fork),
   /** The thread's open approvals and questions, so a `thread` stream carries them to devices; the index holds the same items. */
@@ -214,7 +236,7 @@ const SavedV1 = Schema.Struct({
   v: Schema.Literal(1),
   now: Schema.Number,
   seq: Schema.Number,
-  threads: Schema.Array(Thread),
+  threads: Schema.Array(StoredThread),
   queue: Schema.Array(QueueItem),
   checkpoints: Schema.Record(Schema.String, Schema.Array(Checkpoint)),
   checkpointSeq: Schema.Number,

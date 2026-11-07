@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { toast } from '@/toast/store';
 import { host } from '../host';
-import type { Thread } from '../model';
+import { MAX_PINS, type Thread } from '../model';
 import { useProfiles } from '../profiles';
 import { queryKeys } from '../queryKeys';
 import {
@@ -105,7 +105,7 @@ function pinHere(
   const next = pinAcross(threads, threadId, order, getRemotePins());
   if (!next)
     return void toast('Pinned is full', {
-      description: 'Orbit has five pin slots. Unpin a thread first.',
+      description: `Pinned holds ${MAX_PINS} threads. Unpin one first.`,
     });
   setRemotePins(next);
 }
@@ -124,7 +124,7 @@ function useMergedDerive(): (state: State) => State {
 }
 
 /**
- * The sidebar's thread list as a function of this computer's state, for what numbers and orders pins (Orbit's keys, the pager)
+ * The sidebar's thread list as a function of this computer's state, for what numbers and orders pins (mod 1–9, the pager)
  * without re-rendering on every streamed token, narrowed to this window's machine filter: call it where the state is read, in a selector or an event handler.
  */
 export function useMergeThreads(): (

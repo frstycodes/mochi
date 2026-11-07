@@ -404,8 +404,6 @@ function PipWindow({
   return (
     <motion.section
       aria-label={`Floating ${tabTitle(tab)}`}
-      // A pause before dragging shouldn't open Orbit's long-press menu.
-      data-no-orbit
       data-tucked={isTucked || undefined}
       drag
       dragControls={controls}

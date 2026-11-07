@@ -450,7 +450,7 @@ function reduce(state: State, action: Action): State {
           const nested = {
             ...t,
             parent: { threadId: action.parentId },
-            orbitSlot: undefined,
+            pinOrder: undefined,
           };
           return parent
             ? log(nested, linkRow('parent', parent, state.now))

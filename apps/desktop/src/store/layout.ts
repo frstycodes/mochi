@@ -427,9 +427,9 @@ function presetViews(state: State, count: number): View[] {
   );
   const ranked = [
     ...threads
-      .filter((t) => t.orbitSlot !== undefined)
-      .sort((a, b) => a.orbitSlot! - b.orbitSlot!),
-    ...threads.filter((t) => t.orbitSlot === undefined),
+      .filter((t) => t.pinOrder !== undefined)
+      .sort((a, b) => a.pinOrder! - b.pinOrder!),
+    ...threads.filter((t) => t.pinOrder === undefined),
   ];
   const views: View[] = [focused];
   for (const t of ranked) {

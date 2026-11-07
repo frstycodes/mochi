@@ -47,7 +47,7 @@ export function forkThread(
       isExisting: undefined,
     },
     line: freeLine(state.threads.filter((t) => t.spaceId === parent.spaceId)),
-    orbitSlot: undefined,
+    pinOrder: undefined,
     status: base.status === 'settled' ? 'running' : base.status,
     prs: [],
     steps: base.steps.map((s) => ({ ...s, id: `${s.id}-f${state.seq}` })),

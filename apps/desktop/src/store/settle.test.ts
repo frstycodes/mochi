@@ -13,9 +13,9 @@ import { layoutReducer } from './layout.ts';
 const th = (id: string): View => ({ kind: 'thread', id });
 const thread = (
   id: string,
-  orbitSlot?: number,
+  pinOrder?: number,
   status: Thread['status'] = 'running',
-) => ({ id, spaceId: 's', orbitSlot, status }) as Thread;
+) => ({ id, spaceId: 's', pinOrder, status }) as Thread;
 
 function start(views: View[], threads: Thread[]) {
   let layout = singleLayout(views[0]);

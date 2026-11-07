@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent } from 'react';
 import { toast } from '../toast/store.ts';
+import { MAX_PINS } from '../model';
 import { pinnedThreads, togglePin } from '../reorder';
 import { useHarness, type State } from '../store';
 import {
@@ -144,7 +145,7 @@ function pinFocused(
   const lists = togglePin(threads, s.spaceId, thread.id);
   if (!lists)
     return toast('Pinned is full', {
-      description: 'Orbit has five pin slots. Unpin a thread first.',
+      description: `Pinned holds ${MAX_PINS} threads. Unpin one first.`,
     });
   // Another computer's thread is pinned on this screen only.
   if (parseRemoteThreadId(thread.id)) return toggleRemotePin(thread.id);

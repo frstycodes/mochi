@@ -80,7 +80,6 @@ import {
   type Thread,
 } from '../model';
 import { queueToast, useResolvedQueueToasts } from '../QueueToast';
-import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
 import { ReportCard } from '../goals/ReportCard';
 import { turnAnchor } from '../chat/turnAnchor';
@@ -177,7 +176,6 @@ export function DesignPage() {
           </main>
         </ScrollArea>
       </MachinesProvider>
-      <Orbit />
       <PhotoViewer />
       <Toaster />
     </HarnessProvider>
@@ -258,9 +256,6 @@ function Overview() {
         Tokens, components and recipes for the agent harness. Built from
         shadcn/ui, AI Elements and Solar icons, themed from DESIGN.md. Dark
         first, cool neutrals, squircle corners, hairline separation.
-      </p>
-      <p className="flex flex-wrap items-center gap-1.5 type-caption text-subtle-foreground">
-        Hold <Shortcut keys={['alt']} /> anywhere on this page to try Orbit.
       </p>
     </section>
   );
@@ -506,7 +501,6 @@ function Foundations() {
                   'goal panel expansion',
                 ],
                 ['Window snap', 'spring 420 / 36', 'PiP keeps throw velocity'],
-                ['Orbit', '100–120ms fade', 'positions never animate'],
               ].map(([name, value, use]) => (
                 <tr key={name} className="border-b">
                   <td className="py-2 pr-4">{name}</td>
@@ -671,9 +665,6 @@ function Actions() {
             <Shortcut keys={['mod', 'Enter']} />
             <Kbd>N</Kbd>
             <Shortcut keys={['nav', '1']} />
-            <span className="flex items-center gap-1.5">
-              Hold <Shortcut keys={['alt']} /> for Orbit
-            </span>
           </div>
         </Block>
         <Block

@@ -321,14 +321,6 @@ test('H4 commands match their physical defaults, accept a rebind, and stop on th
     ['photo-fit', 'Digit0', {}],
     ['annotation-undo', 'KeyZ', { metaKey: true }],
     ['annotation-redo', 'KeyZ', { metaKey: true, shiftKey: true }],
-    ['orbit-hold', 'AltLeft', { altKey: true }],
-    ...([1, 2, 3, 4] as const).map(
-      (n): [CommandId, string, Partial<ReturnType<typeof key>>] => [
-        `orbit-${n}`,
-        `Digit${n}`,
-        {},
-      ],
-    ),
   ];
   for (const isMac of [true, false]) {
     for (const [id, code, macMods] of cases) {
@@ -375,19 +367,6 @@ test('H4 commands match their physical defaults, accept a rebind, and stop on th
     }
   }
   assert.ok(
-    isCommand(key('Digit1', { altKey: true }), 'orbit-1', {}, true),
-    'Orbit selection works while holding Alt',
-  );
-  assert.ok(
-    isCommand(
-      key('Digit1', { metaKey: true }),
-      'orbit-1',
-      { 'orbit-hold': 'mod+F12' },
-      true,
-    ),
-    'Orbit selection follows a rebound hold modifier',
-  );
-  assert.ok(
     isCommand(
       key('NumpadEnter', { metaKey: true }),
       'report-take-move',
@@ -430,10 +409,5 @@ test('H4 commands match their physical defaults, accept a rebind, and stop on th
     checkBinding('annotation-undo', ['mod', 'Q'], {}, true).ok,
     false,
     'annotation cannot take an OS shortcut',
-  );
-  assert.deepEqual(
-    parseChord('alt'),
-    ['alt'],
-    'the Orbit hold default survives persistence and reset',
   );
 });
