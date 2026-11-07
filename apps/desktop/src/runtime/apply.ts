@@ -140,6 +140,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
             text: event.text,
             toolId: event.id,
             ...(event.description && { description: event.description }),
+            ...(event.input && { input: event.input }),
             ...(event.links && { links: event.links }),
             ...(event.skill && { skill: event.skill }),
             ...(event.mcp && { mcp: event.mcp }),
@@ -420,10 +421,20 @@ function closeCompaction(
 function toolEnd(
   event: Extract<AgentEvent, { type: 'tool' }>,
 ): Partial<ActivityEntry> {
-  const { text, links, output, exitCode, patch, images, generated, widget } =
-    event;
+  const {
+    text,
+    links,
+    output,
+    exitCode,
+    patch,
+    images,
+    generated,
+    widget,
+    isError,
+  } = event;
   return {
     ...(links && { text, links }),
+    ...(isError && { isError }),
     ...(output !== undefined && { output }),
     ...(exitCode !== undefined && { exitCode }),
     ...(patch && { patch }),

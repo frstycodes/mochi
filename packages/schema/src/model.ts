@@ -640,6 +640,11 @@ export const ActivityEntry = Schema.Struct({
   seconds: opt(Schema.Number),
   toolId: opt(Schema.String),
   description: opt(Schema.String),
+  /** The call's arguments as the agent sent them, long strings capped; absent before this was stored. */
+  input: opt(JsonObject),
+  /** The call failed: the agent got an error back. */
+  isError: opt(Schema.Literal(true)),
+  /** A command's output tail, or any other call's result as text (capped). */
   output: opt(Schema.String),
   exitCode: opt(Schema.Number),
   patch: opt(Schema.String),

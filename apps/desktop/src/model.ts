@@ -171,6 +171,11 @@ export interface ActivityEntry {
   toolId?: string;
   /** Tool calls: the agent's own plain-language line for it, the command's output and exit code, an edit's unified diff. */
   description?: string;
+  /** The call's arguments as the agent sent them, long strings capped; absent before this was stored. */
+  input?: Record<string, unknown>;
+  /** The call failed: the agent got an error back. */
+  isError?: true;
+  /** A command's output tail, or any other call's result as text (capped). */
   output?: string;
   exitCode?: number;
   patch?: string;

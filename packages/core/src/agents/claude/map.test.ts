@@ -512,6 +512,7 @@ test('WebSearch ends with its hits as links, WebFetch with the page it read', ()
       id: 's1',
       phase: 'start',
       text: 'Search token bucket',
+      input: { query: 'token bucket' },
     },
   ]);
   const hits = {
@@ -537,6 +538,7 @@ test('WebSearch ends with its hits as links, WebFetch with the page it read', ()
     id: 's1',
     phase: 'end',
     text: 'Search token bucket',
+    output: 'ok',
     links: [
       {
         url: 'https://en.wikipedia.org/wiki/Token_bucket',
@@ -561,6 +563,7 @@ test('WebSearch ends with its hits as links, WebFetch with the page it read', ()
     id: 'f1',
     phase: 'end',
     text: 'Fetch http://redis.io/docs',
+    output: 'ok',
     links: [{ url: 'https://redis.io/docs/' }],
   });
 });
@@ -1095,10 +1098,18 @@ test('a Skill call is a skill load and an mcp__ call names its server and tool, 
       phase: 'start',
       text: 'Skill ui',
       skill: 'ui',
+      input: { skill: '/ui', args: 'the header' },
     },
   ]);
   assert.deepEqual(result('k1'), [
-    { threadId: 't1', type: 'tool', id: 'k1', phase: 'end', text: 'Skill ui' },
+    {
+      threadId: 't1',
+      type: 'tool',
+      id: 'k1',
+      phase: 'end',
+      text: 'Skill ui',
+      output: 'Launching skill: ui',
+    },
   ]);
   assert.deepEqual(
     call('m1', 'mcp__claude_ai_Linear__get_issue', { id: 'LAT-1' })[0],
@@ -1109,6 +1120,7 @@ test('a Skill call is a skill load and an mcp__ call names its server and tool, 
       phase: 'start',
       text: 'Mcp claude.ai Linear: get_issue',
       mcp: { server: 'claude.ai Linear', tool: 'get_issue' },
+      input: { id: 'LAT-1' },
     },
   );
   const github = call('m2', 'mcp__github__list_prs', {})[0];
@@ -1133,7 +1145,14 @@ test('a Skill call is a skill load and an mcp__ call names its server and tool, 
   );
   assert.deepEqual(
     call('b1', 'Skill', {})[0],
-    { threadId: 't1', type: 'tool', id: 'b1', phase: 'start', text: 'Skill' },
+    {
+      threadId: 't1',
+      type: 'tool',
+      id: 'b1',
+      phase: 'start',
+      text: 'Skill',
+      input: {},
+    },
     'no skill name, no skill load',
   );
 });
@@ -1488,4 +1507,39 @@ test('the context window grows to 1M when usage passes the 200K the model report
     },
   } as unknown as SDKMessage);
   assert.equal(result?.type === 'usage' && result.contextMax, 1_000_000);
+});
+
+test('a failed call ends marked as an error with its result text; a file call keeps no result text', () => {
+  const { map } = createMapper('t1', CWD);
+  const call = (id: string, name: string, input: Record<string, unknown>) =>
+    map({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'tool_use', id, name, input }] },
+    } as unknown as SDKMessage);
+  const result = (id: string, content: string, isError: boolean) =>
+    map({
+      type: 'user',
+      parent_tool_use_id: null,
+      message: {
+        content: [
+          { type: 'tool_result', tool_use_id: id, content, is_error: isError },
+        ],
+      },
+    } as unknown as SDKMessage);
+  call('m1', 'mcp__github__create_pr', { title: 'x' });
+  assert.deepEqual(result('m1', 'Validation failed', true), [
+    {
+      threadId: 't1',
+      type: 'tool',
+      id: 'm1',
+      phase: 'end',
+      text: 'Mcp github: create_pr',
+      isError: true,
+      output: 'Validation failed',
+    },
+  ]);
+  call('r1', 'Read', { file_path: `${CWD}/a.ts` });
+  const read = result('r1', 'const a = 1;', false)[0];
+  assert.ok(read.type === 'tool' && read.output === undefined);
 });

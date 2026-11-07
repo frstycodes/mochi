@@ -288,7 +288,12 @@
       "mcp": {
        "server": "linear",
        "tool": "get_issue"
-      }
+      },
+      "input": {
+       "id": "MOC-12"
+      },
+      "isError": true,
+      "output": "Issue not found"
      },
      {
       "at": 804,
