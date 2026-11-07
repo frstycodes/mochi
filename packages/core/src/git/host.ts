@@ -110,7 +110,13 @@ export const git = {
         ],
       };
     }
-    const mergeBase = await runGit(top, ['merge-base', 'HEAD', base]).then(
+    const prHead =
+      scope === 'outside-pr' ? await publishedPrHead(top, branch) : undefined;
+    const mergeBase = await runGit(top, [
+      'merge-base',
+      'HEAD',
+      prHead ?? base,
+    ]).then(
       (s) => s.trim(),
       () => headOrEmptyTree(top),
     );
@@ -586,4 +592,22 @@ function insideWorktreeRoot(path: string) {
 
 function isUnderWorktreeRoot(path: string) {
   return worktreeRoots().some((root) => path.startsWith(root + sep));
+}
+
+async function publishedPrHead(cwd: string, branch: string) {
+  try {
+    const pr = JSON.parse(
+      await runGh(
+        cwd,
+        ['pr', 'view', '--json', 'headRefName,headRefOid'],
+        undefined,
+      ),
+    ) as { headRefName: string; headRefOid: string };
+    if (pr.headRefName !== branch || !/^[a-f0-9]{40}$/.test(pr.headRefOid))
+      return undefined;
+    // A head absent locally cannot safely replace the branch comparison.
+    return (await resolveCommit(cwd, pr.headRefOid)) || undefined;
+  } catch {
+    return undefined;
+  }
 }
