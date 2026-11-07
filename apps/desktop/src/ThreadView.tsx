@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from './threadRow';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
@@ -475,6 +476,7 @@ function ThreadMenu({ thread }: { thread: Thread }) {
             />
           }
         >
+          <ThreadAgentMark thread={thread} />
           <span className="truncate type-title font-normal">
             {thread.title}
           </span>

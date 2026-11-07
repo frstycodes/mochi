@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import { useState } from 'react';
 import { Archive, Chat, Refresh, Search, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -247,7 +248,7 @@ function useSettledPage() {
   };
 }
 
-function SettledRow({
+export function SettledRow({
   thread,
   now,
   isSelected,
@@ -277,8 +278,9 @@ function SettledRow({
         onClick={open}
         className="flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2"
       >
-        <span className="w-full truncate type-body font-medium text-foreground">
-          {thread.title}
+        <span className="flex w-full min-w-0 items-center gap-2 type-body font-medium text-foreground">
+          <ThreadAgentMark thread={thread} />
+          <span className="truncate">{thread.title}</span>
         </span>
         <span className="flex w-full min-w-0 items-center gap-1.5 type-caption text-muted-foreground">
           <span

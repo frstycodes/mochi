@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import { useQuery } from '@tanstack/react-query';
 import { memo } from 'react';
 import { Globe } from '@/icons';
@@ -26,6 +27,7 @@ export const SnapshotCard = memo(function SnapshotCard({
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center gap-2">
+          <ThreadAgentMark thread={snap} />
           <ProgressRing slot={snap.line} size={14} isWorking={snap.isWorking} />
           <span className="min-w-0 flex-1 truncate type-title">
             {snap.title}

@@ -77,6 +77,10 @@ function AppContent() {
               <Suspense>
                 <ReplayPage payload={embeddedReplay} />
               </Suspense>
+            ) : route === 'thread-agent' ? (
+              <Suspense>
+                <ThreadAgentPrototype />
+              </Suspense>
             ) : route === 'design' ? (
               <Suspense>
                 <DesignPage />
@@ -248,5 +252,11 @@ const ReplayPage = lazy(() =>
 const SettingsSidebar = lazy(() =>
   import('./settings/SettingsSidebar').then((m) => ({
     default: m.SettingsSidebar,
+  })),
+);
+
+const ThreadAgentPrototype = lazy(() =>
+  import('./design/ThreadAgentPrototype').then((m) => ({
+    default: m.ThreadAgentPrototype,
   })),
 );

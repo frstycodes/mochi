@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import { listenKeydown } from '../keymap';
 import {
   Fragment,
@@ -320,9 +321,10 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
           onClick={() =>
             dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })
           }
-          className="min-w-0 cursor-default truncate font-normal text-subtle-foreground hover:text-foreground"
+          className="flex min-w-0 cursor-default items-center gap-2 font-normal text-subtle-foreground hover:text-foreground"
         >
-          {thread.title}
+          <ThreadAgentMark thread={thread} />
+          <span className="truncate">{thread.title}</span>
         </button>
       </LeafBar>
       <PaneSlots>
