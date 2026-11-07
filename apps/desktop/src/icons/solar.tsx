@@ -299,16 +299,15 @@ export const ZoomOut = solar(
   Linear.MagnifierZoomOutIcon,
   Bold.MagnifierZoomOutIcon,
 );
-// Mochi's library concepts as stroke glyphs, the same shapes as their lit objects (`src/icons/ObjectIcons.tsx`): a bulb
-// for skills, a puzzle piece for plugins, a wrench for connectors (MCP servers). Solar ships the bulb only.
-export const Skill = solar(Linear.LightbulbIcon, Bold.LightbulbIcon);
-export const Plugin = customIcon(
-  'Plugin',
-  `<path d="M6.7 8h2.9a2.3 2.3 0 1 1 3.6 0h3a1.5 1.5 0 0 1 1.5 1.5V12a2.3 2.3 0 1 1 0 3.6V18a1.5 1.5 0 0 1-1.5 1.5H6.7A1.5 1.5 0 0 1 5.2 18V9.5A1.5 1.5 0 0 1 6.7 8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>`,
+// Mochi's library concepts: a graduation cap for skills (know-how), a plug for connectors (MCP servers), a box for plugins.
+export const Skill = solar(
+  Linear.SquareAcademicCapIcon,
+  Bold.SquareAcademicCapIcon,
 );
-export const Connector = customIcon(
-  'Connector',
-  `<g transform="rotate(-45 12 12)" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 10.7a4.3 4.3 0 1 1 0 2.6"/><path d="M1.6 10.7h3.2v2.6H1.6"/><path d="M9.8 10.8h11a1.2 1.2 0 0 1 0 2.4h-11"/></g>`,
+export const Connector = solar(Linear.PlugCircleIcon, Bold.PlugCircleIcon);
+export const Plugin = solar(
+  Linear.BoxMinimalisticIcon,
+  Bold.BoxMinimalisticIcon,
 );
 // A drag handle: two columns of three dots. Solar has none.
 export const Grip = customIcon(

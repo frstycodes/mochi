@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
+import { Connector } from '@/icons';
 import { cn } from '@/lib/utils';
 import mochiIcon from '../../build/icon.svg';
 import { hostname } from '../agentPhase';
 import { IconImage } from '../IconImage';
-import { McpServerIcon } from '../icons/ObjectIcons';
 import { useLibraryNames } from '../library/names';
 import { MOCHI_SERVER } from '@mochi/domain/runtime/toolTable';
 import { useThread } from '../store';
@@ -27,7 +27,7 @@ export function McpIcon({
 
 /**
  * An MCP server's mark: Mochi's app icon, the library's icon for a connector or plugin, the server site's favicon, or the
- * wrench while it loads and when there is none. A connector's own address wins over `url`, which is Mochi's local proxy for it.
+ * connector plug while it loads and when there is none. A connector's own address wins over `url`, which is Mochi's local proxy for it.
  */
 export function McpServerMark({
   server,
@@ -52,7 +52,7 @@ export function McpServerMark({
     return (
       <LibraryImage
         src={name.image}
-        fallback={<McpServerIcon className={className} />}
+        fallback={<ConnectorFallback className={className} />}
         className={className}
       />
     );
@@ -61,10 +61,19 @@ export function McpServerMark({
     return (
       <Favicon
         host={hostname(site)}
-        fallback={<McpServerIcon className={className} />}
+        fallback={<ConnectorFallback className={className} />}
       />
     );
-  return <McpServerIcon className={className} />;
+  return <ConnectorFallback className={className} />;
+}
+
+function ConnectorFallback({ className }: { className?: string }) {
+  return (
+    <Connector
+      aria-hidden
+      className={cn('size-4 shrink-0 text-muted-foreground', className)}
+    />
+  );
 }
 
 /** A skill's mark: its plugin's or its own icon from the library, else `fallback`. */

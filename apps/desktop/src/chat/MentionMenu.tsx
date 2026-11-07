@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Chat, Plug, ShieldAlert, Skill, Window, X } from '@/icons';
+import { Chat, Plugin, ShieldAlert, Skill, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
@@ -195,7 +195,7 @@ export function ItemMeta({
   );
 }
 
-/** The lightbulb every skill without its own icon wears, here and in the `/` menu. */
+/** The cap every skill without its own icon wears, here and in the `/` menu. */
 export function SkillFallback() {
   return (
     <Skill className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -203,7 +203,9 @@ export function SkillFallback() {
 }
 
 function PluginFallback() {
-  return <Plug className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
+  return (
+    <Plugin className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+  );
 }
 
 function toolCountLabel(server: Pick<McpServer, 'toolCount' | 'status'>) {

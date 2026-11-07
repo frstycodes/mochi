@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { File, PatchDiff } from './files/Diffs';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
+import { Check, Flag, Globe, GlobeSearch, Skill, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { ErrorFallback } from '@/components/ErrorFallback';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
@@ -718,7 +718,7 @@ function ActionIcon({ action }: { action: CurrentAction }) {
       <SkillMark
         skill={call.target}
         className="size-3.5"
-        fallback={<Note aria-hidden className="size-3.5 shrink-0 text-info" />}
+        fallback={<Skill aria-hidden className="size-3.5 shrink-0 text-info" />}
       />
     );
   if (call.verb === 'Mcp')
@@ -807,7 +807,7 @@ function SkillRow({
     <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta">
       <SkillMark
         skill={name}
-        fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />}
+        fallback={<Skill className="size-4 shrink-0 text-info" aria-hidden />}
       />
       <span className="shrink-0 text-subtle-foreground">Using skill</span>
       <span className="shrink-0 font-medium text-info" title={name}>
