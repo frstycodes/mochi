@@ -26,3 +26,28 @@ test('wrap_up sets a bar for decisions and assumptions, on and off', () => {
     assert.match(text, /usually empty/);
   }
 });
+
+test('subagent guidance defaults to native tools and model choice while preserving explicit requests', () => {
+  for (const isCodex of [false, true]) {
+    for (const isSubThread of [false, true]) {
+      const text = mochiInstructions({ isCodex, isSubThread });
+      assert.match(
+        text,
+        /default to your native same-provider subagent tool and its native model choice/,
+      );
+      assert.match(text, /Preserve explicit user provider\/model requests/);
+      assert.match(
+        text,
+        /mcp__mochi__start_subagent, not create_thread, when the requested provider\/model is unavailable through your native tool/,
+      );
+      assert.match(
+        text,
+        /Cross-provider delegation requires an explicit user provider\/model request or that concrete capability requirement/,
+      );
+      assert.match(
+        text,
+        /do not choose another provider merely for task size, cost, or a preferred model tier/,
+      );
+    }
+  }
+});
