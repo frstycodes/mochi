@@ -67,7 +67,7 @@ test('a live row says what the agent is doing while it works, and nothing once i
     workingLabel(thread({ live: live({ starting: 'claude' }) })),
     'Starting Claude Code',
   );
-  assert.equal(workingLabel(thread({ live: live({}) })), 'Thinking');
+  assert.equal(workingLabel(thread({ live: live({}) })), 'Working');
   assert.equal(
     workingLabel(
       thread({

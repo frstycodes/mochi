@@ -8,7 +8,6 @@ import { AssumptionDot } from './Assumptions';
 import { PlanIcon } from './NextMove';
 import {
   count,
-  foldDone,
   recordLayout,
   recordTitle,
   type RecordItem,
@@ -32,8 +31,9 @@ export function PlanRecordRow({
   if (!layout.steps.length && !layout.unplaced.length) return null;
   return (
     // Pulled out by the row padding so its icon lines up with the work log above it.
-    <section aria-label="Plan record" className="-mx-3 flex flex-col">
+    <section aria-label="Plan record" className="-mx-2 flex flex-col">
       <StepLine
+        isLog
         icon={
           <ClipboardList aria-hidden className="size-4 text-muted-foreground" />
         }
@@ -44,13 +44,9 @@ export function PlanRecordRow({
       />
       <Expand isOpen={isOpen}>
         <ol aria-label="Plan" className="flex flex-col pl-6">
-          {foldDone(layout.steps).map((row) =>
-            row.kind === 'fold' ? (
-              <DoneRun key={`fold-${row.entries[0].n}`} entries={row.entries} />
-            ) : (
-              <RecordStepRow key={row.entry.n} entry={row.entry} />
-            ),
-          )}
+          {layout.steps.map((entry) => (
+            <RecordStepRow key={entry.n} entry={entry} />
+          ))}
           {layout.unplaced.length > 0 && (
             <li className="mt-1 flex flex-col">
               <SectionLabel className="px-3 py-1.5">Not on a step</SectionLabel>
@@ -102,39 +98,6 @@ function RecordStepRow({ entry }: { entry: RecordStep }) {
   );
 }
 
-function DoneRun({ entries }: { entries: RecordStep[] }) {
-  const [isOpen, setOpen] = useState(false);
-  return (
-    <li className="flex flex-col">
-      <StepLine
-        icon={<PlanIcon status="done" slot={1} />}
-        title={`${entries.length} steps done`}
-        titleClass="text-muted-foreground"
-        isOpen={isOpen}
-        onToggle={() => setOpen(!isOpen)}
-      />
-      <Expand isOpen={isOpen}>
-        <div className="flex flex-col">
-          {entries.map((e) => (
-            <DoneLine key={e.n} step={e.step} />
-          ))}
-        </div>
-      </Expand>
-    </li>
-  );
-}
-
-function DoneLine({ step }: { step: Step }) {
-  return (
-    <StepLine
-      icon={<PlanIcon status="done" slot={1} />}
-      title={step.title}
-      titleClass="text-muted-foreground"
-      isInset
-    />
-  );
-}
-
 /** A settled step: done, stopped partway, or never started. */
 const recordStatus = (step: Step) =>
   step.status === 'done'
@@ -149,7 +112,7 @@ function StepLine({
   title,
   titleClass,
   meta,
-  isInset,
+  isLog,
   isOpen,
   onToggle,
 }: {
@@ -157,7 +120,8 @@ function StepLine({
   title: string;
   titleClass?: string;
   meta?: ReactNode;
-  isInset?: boolean;
+  /** The record's own line in the transcript: a log line's height and inset, like every event beside it. */
+  isLog?: boolean;
   isOpen?: boolean;
   onToggle?: () => void;
 }) {
@@ -166,7 +130,7 @@ function StepLine({
     <div
       className={cn(
         'relative flex h-9 min-w-0 items-center gap-2.5 rounded-md px-3 type-meta',
-        isInset && 'pl-9',
+        isLog && 'h-7 w-fit max-w-full gap-2 rounded-lg px-2',
         !!onToggle && 'hover:bg-accent/60',
       )}
     >

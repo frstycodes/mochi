@@ -74,7 +74,7 @@ export function SubagentLine({ subagent }: { subagent: Subagent }) {
     const text =
       currentStep(subagent) ??
       subagent.activity ??
-      (subagent.message || subagent.steps.length ? 'Thinking' : 'Starting');
+      (subagent.message || subagent.steps.length ? 'Working' : 'Starting');
     return (
       <Tooltip>
         <TooltipTrigger render={<span className="flex min-w-0 flex-1" />}>

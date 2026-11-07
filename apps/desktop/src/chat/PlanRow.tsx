@@ -1,4 +1,4 @@
-import { Flag } from '@/icons';
+import { ClipboardList } from '@/icons';
 import { FoldChevron } from '@/Fold';
 import {
   Collapsible,
@@ -16,8 +16,8 @@ export function PlanRow({ entries }: { entries: ActivityEntry[] }) {
   if (entries.length === 1) return <EventLine text={last.text} at={last.at} />;
   return (
     <Collapsible className="flex flex-col">
-      <CollapsibleTrigger className="group group/fold flex w-fit max-w-full cursor-default gap-2 rounded-sm text-left type-caption text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2">
-        <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
+      <CollapsibleTrigger className="group group/fold -mx-2 flex min-h-7 w-fit max-w-full cursor-default items-start gap-2 rounded-lg px-2 py-1 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2">
+        <ClipboardList aria-hidden className="mt-px size-4 shrink-0" />
         <span className="min-w-0 [overflow-wrap:anywhere]">
           {planSummary(entries)}
           <span className="whitespace-nowrap tabular text-subtle-foreground">
@@ -25,10 +25,10 @@ export function PlanRow({ entries }: { entries: ActivityEntry[] }) {
             · {clock(last.at)}
           </span>
         </span>
-        <FoldChevron className="mt-px text-subtle-foreground" />
+        <FoldChevron className="mt-[3px] text-subtle-foreground" />
       </CollapsibleTrigger>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
-        <ul className="mt-1 ml-5.5 flex flex-col gap-0.5 type-caption text-subtle-foreground">
+        <ul className="mt-1 ml-6 flex flex-col gap-0.5 type-meta text-subtle-foreground">
           {entries.map((e, i) => (
             <li key={i} className="[overflow-wrap:anywhere]">
               {e.text.replace(/^Plan: /, '')}

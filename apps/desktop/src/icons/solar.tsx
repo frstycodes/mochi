@@ -5,6 +5,11 @@ import * as Linear from '@solar-icons/react/linear';
 import { customIcon, type IconComponent, type IconProps } from './glyph';
 
 export const Archive = solar(Linear.ArchiveIcon, Bold.ArchiveIcon);
+// A plaster: Auto-fix patching a PR. Bug and Refresh already mean a failure and a reload.
+export const Autofix = solar(
+  Linear.AdhesivePlasterIcon,
+  Bold.AdhesivePlasterIcon,
+);
 export const Snooze = solar(Linear.AlarmSleepIcon, Bold.AlarmSleepIcon);
 export const ArrowDown = solar(Linear.ArrowDownIcon, Bold.ArrowDownIcon);
 export const ArrowLeft = solar(Linear.ArrowLeftIcon, Bold.ArrowLeftIcon);
@@ -36,6 +41,7 @@ export const Bug = solar(Linear.BugIcon, Bold.BugIcon);
 export const Camera = solar(Linear.CameraIcon, Bold.CameraIcon);
 export const Chart = solar(Linear.ChartIcon, Bold.ChartIcon);
 export const Chat = solar(Linear.ChatRoundIcon, Bold.ChatRoundIcon);
+export const Comment = solar(Linear.ChatRoundLineIcon, Bold.ChatRoundLineIcon);
 export const Check = solar(Linear.CheckIcon, Bold.CheckIcon);
 export const CheckRead = solar(Linear.CheckReadIcon, Bold.CheckReadIcon);
 export const CheckCircle = solar(Linear.CheckCircleIcon, Bold.CheckCircleIcon);
