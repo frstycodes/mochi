@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import { useState, type ReactNode } from 'react';
 import { Autofix, Comment, InboxIn, InboxOut } from '@/icons';
 import { FoldChevron } from '@/Fold';
@@ -190,11 +191,12 @@ export function ThreadName({
       title={`Open “${title}”`}
       onClick={open}
       className={cn(
-        'relative z-10 max-w-[50%] shrink-0 cursor-pointer truncate text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none',
+        'relative z-10 inline-flex max-w-[50%] shrink-0 items-center gap-1.5 cursor-pointer text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none',
         className,
       )}
     >
-      {title}
+      <ThreadAgentMark thread={thread} />
+      <span className="truncate">{title}</span>
     </button>
   );
 }

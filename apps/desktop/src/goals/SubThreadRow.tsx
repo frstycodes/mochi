@@ -3,7 +3,12 @@ import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
 import { PrStack } from '../git/PrStack';
 import { ThreadPeek } from '../layout/ThreadPeek';
-import { AgentsBadge, rowStatusMark, useThreadRow } from '../threadRow';
+import {
+  ThreadAgentMark,
+  AgentsBadge,
+  rowStatusMark,
+  useThreadRow,
+} from '../threadRow';
 import { StatusMark } from '../ui';
 import { TONE_TEXT, useOpenThread } from './SubThreads';
 
@@ -37,6 +42,7 @@ export function SubThreadRow({
           className="absolute inset-0 cursor-default rounded-[inherit] focus-visible:outline-2"
         />
         <span className="flex min-w-0 items-center gap-2 type-meta">
+          <ThreadAgentMark thread={sub} />
           <span
             className={cn(
               'min-w-0 flex-1 truncate',

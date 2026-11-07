@@ -10,6 +10,7 @@ import { queryKeys } from '../queryKeys';
 export interface ThreadSnapshot {
   id: string;
   title: string;
+  providers: Thread['providers'];
   line: LineSlot;
   status: ThreadStatus;
   nowStep: string;
@@ -48,6 +49,7 @@ function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
   return {
     id: thread.id,
     title: thread.title,
+    providers: thread.providers,
     line: thread.line,
     status: thread.status,
     nowStep: threadDetail(

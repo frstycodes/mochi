@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import { Card } from '@/components/ui/card';
 import { toast } from '@/toast/store';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +23,7 @@ import { threadCwd } from '../host/cwd';
 import type { DiffFile } from '../host/types/git';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
-import { lineColor, ProgressRing } from '../ui';
+import { ProgressRing } from '../ui';
 import { FileRow } from '../chat/FileRow';
 import { DiffStat } from '../WorkLog';
 
@@ -113,11 +114,7 @@ function ForkSide({
     >
       <header className="flex min-w-0 flex-col gap-1">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            aria-hidden
-            className="size-2 shrink-0 rounded-full"
-            style={{ background: lineColor(thread.line) }}
-          />
+          <ThreadAgentMark thread={thread} />
           <h3 className="min-w-0 truncate type-title">{thread.title}</h3>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 type-meta text-muted-foreground">

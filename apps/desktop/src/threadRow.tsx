@@ -26,7 +26,7 @@ import { reportHeadline } from './goals/report';
 import { runningBackground } from './runtime/subagents';
 import { useHarnessSelector } from './store';
 import { isUnread } from './store/seen';
-import type { StatusMarkKind } from './ui';
+import { ProviderMark, type StatusMarkKind } from './ui';
 import { ProjectIcon } from './ProjectIcon';
 import { useProjectAt } from './projects';
 
@@ -88,6 +88,22 @@ export function rowStatusMark(
     return { status: 'failed', label: row.status };
   if (row.isUnread && !isActive) return { status: 'unread', label: 'Unread' };
   return null;
+}
+
+export function ThreadAgentMark({
+  thread,
+}: {
+  thread: Pick<Thread, 'providers'>;
+}) {
+  const provider = thread.providers[0];
+  if (!provider)
+    return (
+      <Chat
+        aria-label="Agent unavailable"
+        className="size-4 shrink-0 text-muted-foreground"
+      />
+    );
+  return <ProviderMark provider={provider} size={16} />;
 }
 
 /** The thread's project as its icon (a chat glyph when it has none), named in the tooltip. */

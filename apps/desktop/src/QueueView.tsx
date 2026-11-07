@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from './threadRow';
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
@@ -60,7 +61,6 @@ import {
   useSpaceThreads,
   useDispatch,
 } from './store';
-import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
 import { QuestionForm } from './chat/QuestionForm';
 import { useSendCiLog } from './notify/useSendCiLog';
@@ -279,7 +279,7 @@ export function QueueDecision({
   );
 }
 
-function ThreadLink({
+export function ThreadLink({
   thread,
   onOpen,
 }: {
@@ -293,13 +293,8 @@ function ThreadLink({
       onClick={onOpen}
       className="min-w-0 text-muted-foreground"
     >
-      <span
-        aria-hidden
-        className="size-2 shrink-0 rounded-full"
-        style={{ background: lineColor(thread.line) }}
-      />
+      <ThreadAgentMark thread={thread} />
       <span className="truncate">{thread.title}</span>
-      <ProviderMarks providers={thread.providers} size={12} />
     </Button>
   );
 }

@@ -118,6 +118,7 @@ import {
   SnoozeAction,
   ThreadDetailText,
   ThreadTitleText,
+  ThreadAgentMark,
   ThreadProjectMark,
   rowStatusMark,
   useThreadRow,
@@ -1293,6 +1294,7 @@ export function ThreadItem({
   const body = (
     <>
       <span className="flex min-w-0 items-center gap-2">
+        <ThreadAgentMark thread={thread} />
         {isRenaming ? (
           <RowTitleField thread={thread} />
         ) : (
