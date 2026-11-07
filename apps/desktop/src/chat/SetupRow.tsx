@@ -21,8 +21,8 @@ import { CallList, Expand, RunOutput, TrailIcon } from '../WorkLog';
 import { outputLines } from './output';
 
 /**
- * The worktree's preparation before the agent's first turn, at the top of the thread: one line like a work group, open while
- * it runs or waits on you, folded to "Worktree ready in 14s" once done. A failed step waits for Retry, Skip setup or a look in
+ * The worktree's preparation before the agent's first turn, at the top of the thread: one line like a work group, folded by default,
+ * opening on failure to show recovery actions. A failed step waits for Retry, Skip setup or a look in
  * the terminal; the agent doesn't start until you pick.
  */
 export function SetupRow({
@@ -33,7 +33,7 @@ export function SetupRow({
   setup: WorktreeSetup;
 }) {
   const [isOpenByYou, setOpenByYou] = useState<boolean>();
-  const isActive = setup.status === 'running' || setup.status === 'failed';
+  const isActive = setup.status === 'failed';
   const isOpen = isOpenByYou ?? isActive;
   const elapsed = useElapsed(setup.startedAt, setup.endedAt);
 
