@@ -1,6 +1,6 @@
 import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
-import { isTurnCall } from './mochiCalls.ts';
+import { isRecordedElsewhere, isWidgetCall } from './mochiCalls.ts';
 import type { TurnAnchor } from './turnAnchor.ts';
 import type { TurnChanges } from './turnChanges.ts';
 import { plural } from '@mochi/domain/lib/format';
@@ -110,7 +110,8 @@ export function chatRows(
       turn = undefined;
       return rows.push({ kind: 'image', key, entry });
     }
-    if (entry.kind === 'tool' && isTurnCall(entry)) return;
+    if (entry.kind === 'tool' && isWidgetCall(entry)) return;
+    if (isRecordedElsewhere(entry)) return;
     if (entry.kind === 'tool' || entry.kind === 'reasoning') {
       isMidWork = true;
       if (turn) turn.entries.push(entry);

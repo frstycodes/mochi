@@ -1223,12 +1223,45 @@ test('thread changes log in the caller without a toast', async () => {
 
 test('quiet tools log but never toast', async () => {
   const t = setup();
-  await t.ok('wrap_up', {
-    recap: 'Kept the cookie name.',
-    decisions: [],
-  });
+  await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
   assert.equal(t.toasts.length, 0);
-  assert.equal(lastLog(t.thread('rl')), 'Claude wrapped up the turn');
+  assert.match(lastLog(t.thread('rl')), /^Claude renamed /);
+});
+
+test('a call whose widget or messaging row records it logs no line of its own', async () => {
+  const t = setup();
+  const before = lastLog(t.thread('rl'));
+  await t.ok('wrap_up', { recap: 'Kept the cookie name.', decisions: [] });
+  await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new table' });
+  assert.equal(lastLog(t.thread('rl')), before);
+  Object.assign(t.thread('adm'), { parent: { threadId: 'rl' } });
+  const subBefore = lastLog(t.thread('adm'));
+  await t.ok('report_to_parent', { status: 'done', summary: 'Done' }, 'adm');
+  assert.equal(lastLog(t.thread('adm')), subBefore);
+});
+
+test("report_to_parent's row reads as a message to the parent, like send_to_thread's", async () => {
+  const t = setup();
+  Object.assign(t.thread('adm'), { parent: { threadId: 'rl' } });
+  t.env.dispatch({
+    type: 'say',
+    threadId: 'adm',
+    entry: {
+      who: 'claude',
+      kind: 'tool',
+      text: 'Mcp mochi: report_to_parent',
+      mcp: { server: 'mochi', tool: 'report_to_parent' },
+    },
+  });
+  await t.ok(
+    'report_to_parent',
+    { status: 'done', summary: ' Shipped ' },
+    'adm',
+  );
+  assert.deepEqual(
+    t.thread('adm').activity.findLast((a) => a.kind === 'tool')!.sent,
+    { threadId: 'rl', title: t.thread('rl').title, text: 'Shipped' },
+  );
 });
 
 test('another profile is out of reach and bad args are errors, not throws', async () => {

@@ -13,8 +13,7 @@ import {
   type ToolCall,
   type ToolVerb,
 } from './summary.ts';
-import { isTurnCall, mochiCall } from './chat/mochiCalls.ts';
-import { isSendTarget } from './chat/threadMessages.ts';
+import { isWidgetCall, mochiCall } from './chat/mochiCalls.ts';
 
 const VERB_PHASE = {
   Read: 'read',
@@ -106,13 +105,13 @@ export function currentAction(thread: Thread): CurrentAction | undefined {
   if (pending) return { label: pending.label };
   const last = thread.activity.findLast(
     (e) =>
-      (e.kind === 'tool' && !isTurnCall(e)) ||
+      (e.kind === 'tool' && !isWidgetCall(e)) ||
       e.kind === 'reasoning' ||
       e.kind === 'message' ||
       (isWaiting && isWaitEvent(e)),
   );
   const tool = thread.activity.findLast(
-    (e) => e.kind === 'tool' && !isTurnCall(e),
+    (e) => e.kind === 'tool' && !isWidgetCall(e),
   );
   if (last && isWaitEvent(last)) {
     const call = tool && parseTool(tool.text);
@@ -178,9 +177,7 @@ export function toolLabel(call: ToolCall) {
     Search: `Searching ${call.target}`,
     Fetch: `Reading ${hostname(call.target)}`,
     Skill: `Using the ${namesNow().skill(call.target).title} skill`,
-    Mcp: isSendTarget(call)
-      ? 'Messaging another thread'
-      : (mochiCall(call)?.[0] ?? `Calling ${mcpLabel(call.target)}`),
+    Mcp: mochiCall(call)?.[0] ?? `Calling ${mcpLabel(call.target)}`,
   }[call.verb];
 }
 
