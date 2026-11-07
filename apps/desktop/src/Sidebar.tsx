@@ -503,7 +503,7 @@ function SpaceNav({
           rowActions={rowActions}
           selectedIds={selection.ids}
           filterMenu={
-            <div className="absolute top-1.5 right-3 z-10 flex gap-0.5">
+            <div className="flex shrink-0 gap-0.5">
               <MachineFilterMenu filter={machineFilter} />
               <ProjectFilterMenu spaceId={spaceId} filter={projectFilter} />
             </div>
@@ -839,7 +839,6 @@ function ThreadList({
 
   return (
     <SidebarGroup>
-      {filterMenu}
       <DragSurface
         distance={DRAG_THRESHOLD}
         canStart={drag.canStart}
@@ -856,7 +855,7 @@ function ThreadList({
                 open={isPinnedOpen || !!drag.state}
                 onOpenChange={setPinnedOpen}
               >
-                <SectionToggle label="Pinned" />
+                <SectionToggle label="Pinned" actions={filterMenu} />
                 <FoldContent>
                   <SidebarMenu>
                     <AnimatePresence initial={false} custom={!!drag.state}>
@@ -887,7 +886,11 @@ function ThreadList({
               open={isThreadsOpen || !!drag.state}
               onOpenChange={setThreadsOpen}
             >
-              <SectionToggle label="Threads" data-threads-label />
+              <SectionToggle
+                label="Threads"
+                data-threads-label
+                actions={!showPinned && filterMenu}
+              />
               <FoldContent>
                 <SidebarMenu>
                   <AnimatePresence initial={false} custom={!!drag.state}>
@@ -1047,8 +1050,10 @@ const localRow = (group: ThreadGroup): ListRow => ({
 function NoFilteredThreads({ filterMenu }: { filterMenu: ReactNode }) {
   return (
     <SidebarGroup>
-      {filterMenu}
-      <SidebarGroupLabel>Threads</SidebarGroupLabel>
+      <div className="flex h-7 items-center justify-between pr-1">
+        <SidebarGroupLabel>Threads</SidebarGroupLabel>
+        {filterMenu}
+      </div>
       <p className="px-2 type-caption text-subtle-foreground">
         No open threads match the filter
       </p>
