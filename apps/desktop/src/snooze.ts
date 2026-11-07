@@ -69,7 +69,7 @@ export function wakeSnoozed(
       !isDue &&
       (wasAsking || !asksForYou(t)) &&
       t.status !== 'settled' &&
-      t.orbitSlot === undefined
+      t.pinOrder === undefined
     )
       return t;
     isChanged = true;

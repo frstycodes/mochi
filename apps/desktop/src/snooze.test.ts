@@ -102,7 +102,7 @@ test('settling or pinning ends a snooze', () => {
     undefined,
   );
   assert.equal(
-    wake({ snoozedUntil: later, orbitSlot: 1 }).snoozedUntil,
+    wake({ snoozedUntil: later, pinOrder: 1 }).snoozedUntil,
     undefined,
   );
 });

@@ -577,7 +577,7 @@ function SpaceNav({
  * computer's thread snoozes there (`thread-action`), where its wake runs too.
  */
 const canSnooze = (t: Thread, isSub: boolean) =>
-  !isSub && t.orbitSlot === undefined && t.status !== 'settled';
+  !isSub && t.pinOrder === undefined && t.status !== 'settled';
 
 /** The newest settled threads the sidebar lists; View all opens the rest on the Settled page. */
 const SIDEBAR_SETTLED = 10;
