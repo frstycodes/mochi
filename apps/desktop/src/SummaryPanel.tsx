@@ -107,8 +107,8 @@ import {
   summaryCards,
   type SummaryCardId,
 } from './summarySections';
-import { SkillIcon } from './icons/ObjectIcons';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
+import { SkillFallback } from './chat/MentionMenu';
 import { useLibraryNames } from './library/names';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { useThisBackend } from './remote/useThisBackend';
@@ -591,7 +591,7 @@ function SkillRows({
       {(skill) => (
         <SummaryRow
           key={skill.name}
-          icon={<SkillMark skill={skill.name} fallback={<SkillIcon />} />}
+          icon={<SkillMark skill={skill.name} fallback={<SkillFallback />} />}
           label={
             <span title={skill.name}>{names.skill(skill.name).title}</span>
           }

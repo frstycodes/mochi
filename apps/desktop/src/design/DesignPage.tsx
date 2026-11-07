@@ -4,12 +4,15 @@ import { EventLine, MochiWidget } from '../chat/MochiWidget';
 import {
   ArrowUp,
   CheckCircle,
+  Connector,
   Grid as WidgetGlyph,
   Info,
   Link,
   Monitor,
   Moon,
+  Plugin,
   Pushpin,
+  Skill,
   Sun,
   Warning,
 } from '@/icons';
@@ -71,7 +74,6 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
-import { McpServerIcon, SkillIcon } from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
 import {
   seedQueue,
@@ -712,9 +714,10 @@ const DEVICE_SPECIMENS = [
   'phone',
   undefined,
 ] satisfies (DeviceKind | undefined)[];
-const OBJECT_ICONS = [
-  ['Skill', SkillIcon],
-  ['MCP server', McpServerIcon],
+const LIBRARY_ICONS = [
+  ['Skill', Skill],
+  ['Connector', Connector],
+  ['Plugin', Plugin],
 ] as const;
 
 function Display() {
@@ -786,19 +789,19 @@ function Display() {
           </div>
         </Block>
         <Block
-          title="Object icons"
-          use="Mochi's own concepts (skills, MCP servers), lit like Mochi; the same in both themes."
+          title="Library icons"
+          use="Skills, connectors and plugins: one Solar glyph each, wherever they are named and for any without its own icon."
         >
-          <div data-design="object-icons" className="flex flex-col gap-4">
+          <div data-design="library-icons" className="flex flex-col gap-4">
             <div className="flex items-end gap-6">
-              {OBJECT_ICONS.map(([label, Icon]) => (
+              {LIBRARY_ICONS.map(([label, Icon]) => (
                 <Icon key={label} className="size-12" />
               ))}
             </div>
             <div className="flex items-center gap-6 type-meta text-muted-foreground">
-              {OBJECT_ICONS.map(([label, Icon]) => (
+              {LIBRARY_ICONS.map(([label, Icon]) => (
                 <span key={label} className="flex items-center gap-1.5">
-                  <Icon />
+                  <Icon className="size-4" />
                   {label}
                 </span>
               ))}
