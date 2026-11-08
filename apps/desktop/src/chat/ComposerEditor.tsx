@@ -38,7 +38,7 @@ import {
   usePromptInputAttachments,
   usePromptInputController,
 } from '@/components/ai-elements/prompt-input';
-import { Chat } from '@/icons';
+import { Chat, Plugin, Skill, Window } from '@/icons';
 import { cn } from '@/lib/utils';
 import { useLatest } from '@/useLatest';
 import {
@@ -54,6 +54,7 @@ import {
   type HistoryCursor,
 } from './promptHistory';
 import { FileMark } from './FileMark';
+import { McpServerMark, PluginMark, SkillMark } from './McpIcon';
 import type { Mention } from './mentions';
 import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
 
@@ -66,8 +67,8 @@ export type Caret = { text: string; at: number | null };
 type ComposerEditorProps = {
   /** `/` commands and skills a token in the text can resolve to. */
   items: SlashItem[];
-  /** Files and threads picked from `@`: each one's `@token` in the text renders as one unit. */
-  inlineMentions?: InlineMention[];
+  /** All mentions picked from `@`: each one's `@token` in the text renders as one unit. */
+  inlineMentions?: Mention[];
   placeholder?: string;
   /** Your likely next message: shown in place of the placeholder while the text is empty; Tab or → takes it. */
   suggestion?: string;
@@ -334,9 +335,8 @@ const definedOnly = (attributes: Record<string, string | undefined> = {}) =>
 const slashItemsFacet = Facet.define<SlashItem[], SlashItem[]>({
   combine: (values) => values[0] ?? [],
 });
-type InlineMention = Extract<Mention, { kind: 'file' | 'thread' }>;
-const NO_MENTIONS: InlineMention[] = [];
-const mentionsFacet = Facet.define<InlineMention[], InlineMention[]>({
+const NO_MENTIONS: Mention[] = [];
+const mentionsFacet = Facet.define<Mention[], Mention[]>({
   combine: (values) => values[0] ?? NO_MENTIONS,
 });
 
@@ -499,10 +499,42 @@ class ListMarker extends WidgetType {
 
 const iconRoots = new WeakMap<HTMLElement, Root>();
 
-/** A token's icon in place of its `@`: the file's type, a folder, or a thread. */
+function MentionKindIcon({ mention }: { mention: Mention }) {
+  if (mention.kind === 'thread')
+    return <Chat aria-hidden className="size-3.5 shrink-0" />;
+  if (mention.kind === 'file')
+    return (
+      <FileMark
+        name={mention.title.replace(/\/$/, '').split('/').pop()!}
+        isDir={mention.isDir}
+        className="size-3.5"
+      />
+    );
+  if (mention.kind === 'window')
+    return <Window aria-hidden className="size-3.5 shrink-0" />;
+  if (mention.kind === 'skill')
+    return (
+      <SkillMark
+        skill={mention.title}
+        fallback={<Skill aria-hidden className="size-3.5 shrink-0" />}
+        className="size-3.5"
+      />
+    );
+  if (mention.kind === 'mcp')
+    return <McpServerMark server={mention.title} className="size-3.5" />;
+  return (
+    <PluginMark
+      plugin={mention.title}
+      fallback={<Plugin aria-hidden className="size-3.5 shrink-0" />}
+      className="size-3.5"
+    />
+  );
+}
+
+/** A token's icon in place of its `@`: the file's type, a folder, a thread, window, skill, mcp server, or plugin. */
 class MentionTokenIcon extends WidgetType {
   readonly key: string;
-  constructor(readonly mention: InlineMention) {
+  constructor(readonly mention: Mention) {
     super();
     this.key = `${mention.kind}:${mention.title}`;
   }
@@ -511,21 +543,11 @@ class MentionTokenIcon extends WidgetType {
   }
   toDOM() {
     const box = Object.assign(document.createElement('span'), {
-      className: 'cm-mention-icon',
+      className: 'cm-mention-icon text-info',
     });
     const root = createRoot(box);
     const { mention } = this;
-    root.render(
-      mention.kind === 'thread' ? (
-        <Chat aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-      ) : (
-        <FileMark
-          name={mention.title.replace(/\/$/, '').split('/').pop()!}
-          isDir={mention.isDir}
-          className="size-3.5"
-        />
-      ),
-    );
+    root.render(<MentionKindIcon mention={mention} />);
     iconRoots.set(box, root);
     return box;
   }

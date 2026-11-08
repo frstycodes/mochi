@@ -11,7 +11,6 @@ import {
   useThreadSkills,
 } from './chat/SlashMenu';
 import {
-  MentionChips,
   MentionMenu,
   useMentionMenu,
   useThreadMentionDrop,
@@ -367,7 +366,6 @@ function NewThread() {
                 {...threadDrop}
                 className="data-mention-over:border-ring"
               >
-                <MentionChips menu={mention} />
                 <MachineModelsContext.Provider
                   value={remote ? (catalog ?? NO_CATALOG) : null}
                 >

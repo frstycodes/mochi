@@ -10,6 +10,8 @@ import {
   mentionGroups,
   mentionOptions,
   mentionQuery,
+  mentionSearch,
+  mentionPrefixes,
   withoutQuery,
   withReferences,
   type Mention,
@@ -104,13 +106,12 @@ test('a thread reference becomes a digest and a window reference its screenshot,
     { kind: 'thread', id: 'auth', title: other.title },
     { kind: 'window', id: 'window:1', title: 'Safari — Docs', image: shot },
   ];
-  const ref = withReferences(`why does @${other.title} loop?`, mentions, [
-    other,
-  ]);
+  const message = `why does @${other.title} loop in @Safari — Docs`;
+  const ref = withReferences(message, mentions, [other]);
   assert.equal(
     ref.text,
-    `@Safari — Docs\n\nwhy does @${other.title} loop?`,
-    'the thread stays inline where it was typed; only the window becomes a tag',
+    message,
+    'every reference stays inline where it was typed',
   );
   assert.match(
     ref.prompt,
@@ -123,7 +124,7 @@ test('a thread reference becomes a digest and a window reference its screenshot,
   );
   assert.match(
     ref.prompt,
-    /<window title="Safari — Docs">Screenshot of this window attached\.<\/window>\n\nwhy does "Fix "login" redirect" loop\?$/,
+    /<window title="Safari — Docs">Screenshot of this window attached\.<\/window>\n\nwhy does "Fix "login" redirect" loop in "Safari — Docs"$/,
   );
 
   const send: Action = {
@@ -245,17 +246,14 @@ test('a skill reference asks the agent to load it, an MCP reference to prefer it
     { kind: 'skill', id: 'skill:ui', title: 'ui', description: '' },
     { kind: 'mcp', id: 'mcp:claude.ai Linear', title: 'claude.ai Linear' },
   ];
-  const claude = withReferences('fix the header', mentions, [other], {
+  const typed = '@ui fix the header with @claude.ai Linear';
+  const claude = withReferences(typed, mentions, [other], {
     provider: 'claude',
   });
-  assert.equal(
-    claude.text,
-    '@ui @claude.ai Linear\n\nfix the header',
-    'a thread is inline, never a tag',
-  );
+  assert.equal(claude.text, typed, 'references stay inline, never tags');
   assert.match(
     claude.prompt,
-    /<\/thread>\n\nFor this message, use the "ui" skill: load it with the Skill tool before you start\.\nFor this message, prefer the tools of the "claude\.ai Linear" MCP server \(mcp__claude_ai_Linear__\*\) over other ways to do the same thing\.\n\nfix the header$/,
+    /<\/thread>\n\nFor this message, use the "ui" skill: load it with the Skill tool before you start\.\nFor this message, prefer the tools of the "claude\.ai Linear" MCP server \(mcp__claude_ai_Linear__\*\) over other ways to do the same thing\.\n\n"ui" fix the header with "claude\.ai Linear"$/,
   );
   assert.deepEqual(claude.skills, ['ui']);
 
@@ -283,10 +281,15 @@ test('a plugin reference asks the agent to prefer what the plugin brings', () =>
     id: 'plugin:emilkowalski',
     title: 'emilkowalski',
   });
-  const sent = withReferences('polish the menu', [plugin], [], {
-    provider: 'claude',
-  });
-  assert.equal(sent.text, '@emilkowalski\n\npolish the menu');
+  const sent = withReferences(
+    'polish the menu with @emilkowalski',
+    [plugin],
+    [],
+    {
+      provider: 'claude',
+    },
+  );
+  assert.equal(sent.text, 'polish the menu with @emilkowalski');
   assert.match(
     sent.prompt,
     /prefer what the "emilkowalski" plugin brings .*named "emilkowalski:…"/,
@@ -324,7 +327,7 @@ test('picked skills reach the agent call, so Codex can attach them', () => {
   ]);
 });
 
-test('the @ menu shows threads, windows, skills, connectors and plugins as five groups, in that order', () => {
+test('the @ menu groups threads and plugins ahead of the other references', () => {
   const windows = [
     { id: '4711', title: 'latitude-pact - Slack', app: 'Slack' },
   ];
@@ -337,10 +340,10 @@ test('the @ menu shows threads, windows, skills, connectors and plugins as five 
     groups.map((g) => [g.label, g.items.length]),
     [
       ['Threads', 1],
+      ['Plugins', 1],
       ['Windows', 1],
       ['Skills', 2],
       ['Connectors', 1],
-      ['Plugins', 1],
     ],
   );
   const blocked = mentionGroups([
@@ -434,4 +437,68 @@ test('a /skill typed mid-text is sent as written and its name goes to the agent 
     ],
     'a running thread gets it with the message',
   );
+});
+
+test('mention scopes filter kinds and preserve unknown prefixes', () => {
+  for (const [prefix, kind] of Object.entries({
+    files: 'file',
+    threads: 'thread',
+    plugins: 'plugin',
+    commands: 'skill',
+    skills: 'skill',
+    connectors: 'mcp',
+    windows: 'window',
+  })) {
+    assert.deepEqual(mentionSearch(`${prefix.toUpperCase()}:foo`), {
+      kind,
+      query: 'foo',
+    });
+    const options = mentionOptions(
+      `${prefix}:`,
+      [other],
+      [{ id: 'window', title: 'Window' }],
+      'self',
+      skills,
+      servers,
+      ['plugin'],
+    );
+    assert.ok(options.every((option) => option.kind === kind));
+  }
+  assert.deepEqual(mentionSearch('constructor:foo'), {
+    kind: null,
+    query: 'constructor:foo',
+  });
+  assert.deepEqual(mentionSearch('unknown:foo'), {
+    kind: null,
+    query: 'unknown:foo',
+  });
+  assert.deepEqual(mentionSearch('plugin:github'), {
+    kind: 'plugin',
+    query: 'github',
+  });
+});
+
+test('mention groups put threads, plugins and files first', () => {
+  const options = mentionOptions('', [other], [], 'self', skills, servers, [
+    'plugin',
+  ]);
+  options.push({
+    kind: 'file',
+    name: 'a.ts',
+    dir: '',
+    mention: worktreeMention('a.ts'),
+  });
+  assert.deepEqual(
+    mentionGroups(options).map((group) => group.kind),
+    ['thread', 'plugin', 'file', 'skill', 'mcp'],
+  );
+});
+
+test('prefix autocomplete completes partial names without competing with scoped results', () => {
+  assert.deepEqual(mentionPrefixes('thr'), ['threads']);
+  assert.deepEqual(mentionPrefixes('PL'), ['plugins']);
+  assert.deepEqual(mentionPrefixes('files'), ['files']);
+  assert.deepEqual(mentionPrefixes(''), []);
+  assert.deepEqual(mentionPrefixes('threads:thr'), []);
+  assert.deepEqual(mentionPrefixes('src/'), []);
 });

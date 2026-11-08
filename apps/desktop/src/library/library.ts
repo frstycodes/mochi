@@ -1,5 +1,10 @@
 import type { Provider } from '../model.ts';
-import { serverSummary, type McpServerDef } from '../settings/agentConfig.ts';
+import {
+  commandMeta,
+  serverSummary,
+  skillMeta,
+  type McpServerDef,
+} from '../settings/agentConfig.ts';
 import type { ConnectorSettings } from '@mochi/domain/library/connectorTools';
 import { connectorIcon } from '@mochi/domain/library/connectors';
 import type { PluginBundle } from '@mochi/domain/library/pluginBundle';
@@ -478,6 +483,54 @@ export function profileLayout(
   for (const [name, group] of byOwner)
     folders[name] = standalonePlugin(name, group);
   return { plugins: folders, servers };
+}
+
+/**
+ * The skills and commands a profile's library items expose for a provider, as `/name` entries: plugin skills prefixed
+ * `<plugin>:<skill>`, standalone skills prefixed `mochi:<skill>`, plugin commands prefixed `<plugin>:<command>`.
+ */
+export function profileCommands(
+  index: LibraryIndex,
+  spaceId: string,
+  provider: Provider,
+): {
+  name: string;
+  description: string;
+  argumentHint?: string;
+  isSkill: boolean;
+}[] {
+  const { plugins } = profileLayout(index, spaceId, provider);
+  const result: {
+    name: string;
+    description: string;
+    argumentHint?: string;
+    isSkill: boolean;
+  }[] = [];
+  for (const [pluginName, files] of Object.entries(plugins)) {
+    for (const [path, content] of Object.entries(files)) {
+      const skillMatch = /^skills\/([^/]+)\/SKILL\.md$/.exec(path);
+      if (skillMatch) {
+        const meta = skillMeta(content, skillMatch[1]);
+        result.push({
+          ...meta,
+          name: `${pluginName}:${meta.name}`,
+          isSkill: true,
+        });
+        continue;
+      }
+      const commandMatch = /^commands\/(.+)\.md$/.exec(path);
+      if (commandMatch) {
+        const fileName = commandMatch[1].split('/').pop()!;
+        const meta = commandMeta(content, fileName);
+        result.push({
+          ...meta,
+          name: `${pluginName}:${meta.name}`,
+          isSkill: false,
+        });
+      }
+    }
+  }
+  return result;
 }
 
 /** The profile's signed-in connector accounts on connectors that are on, grouped by the server they're on, in the order they were added. */

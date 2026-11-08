@@ -1,12 +1,16 @@
 import type { AgentImage } from '../host/types/agent.ts';
 import type { AppWindow } from '../host/types/windows.ts';
 import type { AgentCommand, McpServer, Provider, Thread } from '../model.ts';
-import { serializeMentions, type FileMention } from './fileMentions.ts';
+import {
+  mentionTokens,
+  serializeMentions,
+  type FileMention,
+} from './fileMentions.ts';
 
 /**
  * What `@` in the thread composer can point at. A window carries the screenshot taken when you picked it; a skill or MCP
  * server tells the agent what to use for this message, as does a plugin (`id` is prefixed so it can't collide with a thread's). A file or a
- * thread stays in the text as a token (`@src/a.ts`, `@Fix login`) where you typed it; the rest show as chips.
+ * thread stays in the text as a token (`@src/a.ts`, `@Fix login`) where you typed it; every reference stays inline.
  */
 export type Mention =
   | { kind: 'thread'; id: string; title: string }
@@ -21,10 +25,6 @@ export type Mention =
   | { kind: 'mcp'; id: string; title: string; toolCount?: number }
   | { kind: 'plugin'; id: string; title: string }
   | FileMention;
-
-/** Mentioned inside the text rather than as a chip. */
-export const isInline = (mention: Mention) =>
-  mention.kind === 'file' || mention.kind === 'thread';
 
 /** A file row: `name` bright, `dir` (where it sits, as you'd type it) dimmed. */
 export type FileOption = {
@@ -51,14 +51,59 @@ export function mentionQuery(text: string) {
   return /(?:^|\s)@([^\s@]*)$/.exec(text)?.[1] ?? null;
 }
 
+export function mentionSearch(query: string) {
+  const match = /^([a-z]+):/i.exec(query);
+  const prefix = match?.[1].toLowerCase();
+  const kind =
+    prefix && Object.hasOwn(MENTION_SCOPES, prefix)
+      ? MENTION_SCOPES[prefix as keyof typeof MENTION_SCOPES]
+      : null;
+  return {
+    kind: kind || null,
+    query: kind ? query.slice(match![0].length) : query,
+  };
+}
+
+export function mentionPrefixes(query: string) {
+  if (!query || query.includes(':')) return [];
+  const prefix = query.toLowerCase();
+  return [
+    'threads',
+    'plugins',
+    'files',
+    'skills',
+    'commands',
+    'connectors',
+    'mcp',
+    'windows',
+  ].filter((name) => name.startsWith(prefix));
+}
+
+const MENTION_SCOPES = {
+  file: 'file',
+  files: 'file',
+  thread: 'thread',
+  threads: 'thread',
+  plugin: 'plugin',
+  plugins: 'plugin',
+  skill: 'skill',
+  skills: 'skill',
+  command: 'skill',
+  commands: 'skill',
+  connector: 'mcp',
+  connectors: 'mcp',
+  mcp: 'mcp',
+  window: 'window',
+  windows: 'window',
+} satisfies Record<string, MentionOption['kind']>;
+
 /** The text with the trailing `@query` taken out, once its option is picked. */
 export function withoutQuery(text: string) {
   return text.replace(/(^|\s)@[^\s@]*$/, '$1');
 }
 
 /**
- * Threads (not `selfId`, none settled), windows, skills, connectors, then plugins whose name contains the query, at most six of
- * each. Spaces are ignored on both sides, since the query ends at the first one: `greetingtheuser` finds "Greeting the user".
+ * Matching references, at most six per kind. Threads exclude `selfId` and settled threads. Spaces are ignored on both sides, since the query ends at the first one: `greetingtheuser` finds "Greeting the user".
  */
 export function mentionOptions(
   query: string,
@@ -69,9 +114,10 @@ export function mentionOptions(
   servers: McpServer[] = [],
   plugins: string[] = [],
 ): MentionOption[] {
-  const q = squash(query);
+  const search = mentionSearch(query);
+  const q = squash(search.query);
   const hit = (title: string) => squash(title).includes(q);
-  return [
+  const options: MentionOption[] = [
     ...threads
       .filter((t) => t.id !== selfId && t.status !== 'settled' && hit(t.title))
       .slice(0, MAX_OPTIONS)
@@ -93,17 +139,20 @@ export function mentionOptions(
       .slice(0, MAX_OPTIONS)
       .map((plugin) => ({ kind: 'plugin' as const, plugin })),
   ];
+  return options.filter(
+    (option) => !search.kind || option.kind === search.kind,
+  );
 }
 
 const squash = (s: string) => s.replace(/\s+/g, '').toLowerCase();
 
 const MENTION_GROUPS = [
-  { kind: 'file', label: 'Files' },
   { kind: 'thread', label: 'Threads' },
+  { kind: 'plugin', label: 'Plugins' },
+  { kind: 'file', label: 'Files' },
   { kind: 'window', label: 'Windows' },
   { kind: 'skill', label: 'Skills' },
   { kind: 'mcp', label: 'Connectors' },
-  { kind: 'plugin', label: 'Plugins' },
 ] as const;
 
 /** The menu's sections in order with their items, empty ones left out. The screen-recording prompt sits with the windows it would unlock. */
@@ -162,7 +211,7 @@ export const optionId = (option: MentionOption) =>
             : `mcp:${option.server.name}`;
 
 /**
- * What the transcript shows (`text`: the chip references as `@title`, then your message as written) and what the agent gets
+ * What the transcript shows (`text`: your message as written, with inline references) and what the agent gets
  * (`prompt`: each thread's digest and a note per screenshot ahead of your message, then what to use for it; `images`: the
  * screenshots in mention order; `skills`: the skills to attach, for harnesses that load them from the message rather than by
  * name). `typedSkills`: skills the message names as `/skill` after its start, which only the separate note makes the harness
@@ -185,23 +234,11 @@ export function withReferences(
       ...typedSkills,
     ]),
   ];
-  const body = serializeMentions(
-    message,
-    mentions.filter((m) => m.kind === 'file' || m.kind === 'thread'),
-    provider,
-  );
+  const body = referencePrompt(message, mentions, provider);
   const others = mentions.filter((m) => m.kind !== 'file');
   if (others.length === 0 && skills.length === 0)
     return { text: message, prompt: body, images: [], skills: [] };
-  const tags = others
-    .filter((m) => !isInline(m))
-    .map((m) => `@${m.title}`)
-    .join(' ');
-  const text = !tags
-    ? message
-    : isCommand
-      ? `${message}\n\n${tags}`
-      : `${tags}\n\n${message}`;
+  const text = message;
   const context = others.flatMap((m) => {
     if (m.kind === 'window')
       return [
@@ -242,6 +279,25 @@ export function withReferences(
     images,
     skills,
   };
+}
+
+function referencePrompt(
+  message: string,
+  mentions: Mention[],
+  provider: Provider,
+) {
+  let prompt = '';
+  let at = 0;
+  for (const { mention, start, end } of mentionTokens(message, mentions)) {
+    const token = message.slice(start, end);
+    const replacement =
+      mention.kind === 'file' || mention.kind === 'thread'
+        ? serializeMentions(token, [mention], provider)
+        : JSON.stringify(mention.title);
+    prompt += message.slice(at, start) + replacement;
+    at = end;
+  }
+  return prompt + message.slice(at);
 }
 
 // Claude loads a skill only through its Skill tool; Codex gets the skill's SKILL.md attached to the message (`skills`).

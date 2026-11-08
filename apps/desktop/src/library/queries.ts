@@ -13,5 +13,10 @@ export function libraryQuery(spaceId: string) {
 export const libraryMutationOptions = mutationOptions({
   mutationFn: (run: () => Promise<unknown>) => run(),
   onSettled: () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.library.all() }),
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.library.all() }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.profile.config.all(),
+      }),
+    ]),
 });

@@ -146,7 +146,6 @@ import { newestYoursKey } from './chat/sendFlight';
 import { launchSend, useSendLanding } from './chat/useSendFlight';
 import { usePrefs, type Prefs } from './settings/prefs';
 import {
-  MentionChips,
   MentionMenu,
   useMentionMenu,
   useThreadMentionDrop,
@@ -971,7 +970,6 @@ const Composer = memo(function Composer({
               onEdit={edit}
               onSendNow={(message) => submit(message, { queuedId: message.id })}
             />
-            <MentionChips menu={mention} />
             <ComposerInput
               ref={editor}
               draftKey={draftKey}

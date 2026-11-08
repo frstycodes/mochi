@@ -7,6 +7,7 @@ import {
   libraryEntries,
   ownSkillItem,
   parseLibrary,
+  profileCommands,
   profileConnectors,
   profileLayout,
   removeItem,
@@ -313,6 +314,108 @@ test('a profile reaches only its own signed-in connector accounts, grouped by se
   );
   assert.equal(libraryEntries(index, 'work')[2].isLinked, false);
   assert.equal(libraryEntries(index, 'work')[0].title, 'linear · work');
+});
+
+test('profileCommands derives skills from profile library items (claude only; codex has no plugin folder)', () => {
+  // Claude gets skills; codex returns nothing since profileLayout gives it no plugin folders
+  const skillIndex: LibraryIndex = {
+    items: [
+      {
+        kind: 'skill',
+        id: 's1',
+        name: 'pdf',
+        description: 'Read PDFs',
+        files: {
+          'SKILL.md': '---\nname: pdf\ndescription: Read PDFs\n---\nBody.',
+        },
+        targets: ['claude'],
+        addedAt: 1,
+        source: null,
+        icon: null,
+      },
+      {
+        kind: 'skill',
+        id: 's2',
+        name: 'shared',
+        description: 'Both',
+        files: { 'SKILL.md': '---\nname: shared\n---\nBody.' },
+        targets: ['claude', 'codex'],
+        addedAt: 1,
+        source: null,
+        icon: null,
+      },
+    ],
+    profiles: { work: ['s1', 's2'], home: [] },
+    marketplaces: [],
+  };
+
+  // Claude gets skills for its targets under the standalone plugin name
+  const claudeCommands = profileCommands(skillIndex, 'work', 'claude');
+  assert.ok(
+    claudeCommands.some(
+      (c) => c.name === `${STANDALONE_PLUGIN}:pdf` && c.isSkill,
+    ),
+    'claude skill prefixed with standalone plugin name',
+  );
+  assert.ok(
+    claudeCommands.some(
+      (c) => c.name === `${STANDALONE_PLUGIN}:shared` && c.isSkill,
+    ),
+    'shared skill included for claude',
+  );
+
+  // Codex: profileLayout returns plugins:{} so profileCommands is empty
+  assert.deepEqual(
+    profileCommands(skillIndex, 'work', 'codex'),
+    [],
+    'codex gets no plugin-folder commands (Codex has no per-thread skill folder)',
+  );
+
+  // Disabled profile gets nothing
+  assert.deepEqual(profileCommands(skillIndex, 'home', 'claude'), []);
+  assert.deepEqual(profileCommands(skillIndex, 'unknown', 'claude'), []);
+});
+
+test('profileCommands uses plugin name prefix for GitHub-sourced and plugin skills', () => {
+  const index: LibraryIndex = {
+    items: [
+      {
+        kind: 'skill',
+        id: 's1',
+        name: 'pdf',
+        description: 'PDF reader',
+        files: {
+          'SKILL.md': '---\nname: pdf\ndescription: PDF reader\n---\nBody.',
+        },
+        targets: ['claude', 'codex'],
+        addedAt: 1,
+        source: 'EmilKowalski/skills/pdf',
+        icon: null,
+      },
+      {
+        kind: 'skill',
+        id: 's2',
+        name: 'notes',
+        description: 'Note taker',
+        files: { 'SKILL.md': '---\nname: notes\n---\nBody.' },
+        targets: ['claude', 'codex'],
+        addedAt: 1,
+        source: null,
+        icon: null,
+      },
+    ],
+    profiles: { work: ['s1', 's2'] },
+    marketplaces: [],
+  };
+  const commands = profileCommands(index, 'work', 'claude');
+  assert.ok(
+    commands.some((c) => c.name === 'emilkowalski:pdf'),
+    'GitHub skill uses owner as plugin prefix',
+  );
+  assert.ok(
+    commands.some((c) => c.name === `${STANDALONE_PLUGIN}:notes`),
+    'standalone skill uses mochi prefix',
+  );
 });
 
 test('a skill written or uploaded in Mochi needs a named SKILL.md and stays inside its folder', () => {

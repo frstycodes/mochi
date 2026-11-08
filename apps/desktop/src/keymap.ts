@@ -18,6 +18,7 @@ export const COMMAND_GROUPS = [
   'Replay',
   'Photos',
   'Annotations',
+  'Composer',
 ] as const;
 
 /**
@@ -31,7 +32,8 @@ export type CommandScope =
   | 'list'
   | 'replay'
   | 'photo'
-  | 'annotation';
+  | 'annotation'
+  | 'menu';
 
 interface Command {
   title: string;
@@ -390,6 +392,21 @@ export const COMMANDS = {
     scope: 'annotation',
     keys: ['mod', 'shift', 'Z'],
   },
+
+  'menu-next': {
+    title: 'Next autocomplete item',
+    group: 'Composer',
+    scope: 'menu',
+    keys: (isMac) => [isMac ? 'nav' : 'mod', 'N'],
+    whileTyping: true,
+  },
+  'menu-previous': {
+    title: 'Previous autocomplete item',
+    group: 'Composer',
+    scope: 'menu',
+    keys: (isMac) => [isMac ? 'nav' : 'mod', 'P'],
+    whileTyping: true,
+  },
 } satisfies Record<string, Command>;
 
 export type CommandId = keyof typeof COMMANDS;
@@ -413,6 +430,10 @@ export const FIXED_KEYS: { keys: Key[]; what: string }[] = [
   {
     keys: ['Enter'],
     what: 'Send from the composer (Shift Enter for a new line)',
+  },
+  {
+    keys: ['up', 'down'],
+    what: 'Move through an autocomplete menu (rebind the extra binding via Menu next / previous)',
   },
   { keys: ['mod'], what: 'Hold while sending to queue or steer the other way' },
   { keys: ['up'], what: 'Edit your last message from an empty composer' },
@@ -769,7 +790,8 @@ export function reservedReason(
 }
 
 const overlaps = (a: CommandScope, b: CommandScope) =>
-  a === b || a === 'global' || b === 'global';
+  a === b ||
+  ((a === 'global' || b === 'global') && a !== 'menu' && b !== 'menu');
 
 /** Another command that `keys` would also trigger where `id` listens. */
 export function conflictOf(

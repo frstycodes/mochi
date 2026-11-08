@@ -5,6 +5,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  realpath,
   rename,
   stat,
   writeFile,
@@ -49,6 +50,8 @@ import {
   HARNESS_IDS,
   HARNESSES,
 } from '../../../../apps/desktop/src/settings/harnesses.ts';
+import { profileCommands } from '../../../../apps/desktop/src/library/library.ts';
+import { readLibrary } from '../library/store.ts';
 import { claudeAiConnectorsOf } from './claude/claudeAiConnectors.ts';
 import { accountFor, userPath } from './config.ts';
 
@@ -61,13 +64,24 @@ export async function readProfileConfig(
   spaceId: string,
   projectRoot?: string,
 ): Promise<ProfileConfig> {
-  const entries = await Promise.all(
-    HARNESS_IDS.map(
-      async (provider) =>
-        [provider, await readProvider(spaceId, provider, projectRoot)] as const,
+  const [entries, library] = await Promise.all([
+    Promise.all(
+      HARNESS_IDS.map(
+        async (provider) =>
+          [
+            provider,
+            await readProvider(spaceId, provider, projectRoot),
+          ] as const,
+      ),
     ),
-  );
-  return Object.fromEntries(entries) as ProfileConfig;
+    readLibrary(),
+  ]);
+  const config = Object.fromEntries(entries) as ProfileConfig;
+  for (const provider of HARNESS_IDS)
+    config[provider].commands.push(
+      ...profileCommands(library, spaceId, provider),
+    );
+  return config;
 }
 
 export async function previewConfig(
@@ -240,6 +254,15 @@ async function readProvider(
             entry(def, enabled, 'user'),
           );
     config.skills = await readSkills(provider, files.skills, settings);
+    if (provider === 'codex') {
+      const shared = await readSkills(
+        provider,
+        join(homedir(), '.agents', 'skills'),
+        settings,
+      );
+      const names = new Set(config.skills.map((skill) => skill.name));
+      config.skills.push(...shared.filter((skill) => !names.has(skill.name)));
+    }
     config.plugins =
       provider === 'claude'
         ? await claudePlugins(files.dir)
@@ -248,6 +271,8 @@ async function readProvider(
       config.claudeAiConnectors = await claudeAiConnectorsOf(account.id);
     if (provider === 'claude')
       config.commands = await claudeCommands(files.dir, settings, projectRoot);
+    if (provider === 'codex')
+      config.commands = await codexCommands(files.dir, settings, projectRoot);
     if (projectRoot) {
       const local = join(projectRoot, INSTRUCTIONS_FILE[provider]);
       config.projectInstructions = (await exists(local)) ? local : null;
@@ -328,32 +353,46 @@ async function readSkills(
     provider === 'codex'
       ? codexSkillOverrides(settings)
       : new Map<string, boolean>();
-  let names: string[];
-  try {
-    names = (await readdir(skillsDir)).filter((n) => !n.startsWith('.')).sort();
-  } catch {
-    return [];
-  }
-  const skills = await Promise.all(
-    names.map(async (folder): Promise<SkillEntry | null> => {
-      const dir = join(skillsDir, folder);
-      const md = await readText(join(dir, 'SKILL.md'));
-      if (!md) return null;
-      const meta = skillMeta(md, folder);
-      return {
-        ...meta,
-        dir,
-        enabled:
-          provider === 'claude'
-            ? !off.has(meta.name)
-            : overrides.get(join(dir, 'SKILL.md')) !== false,
-      };
-    }),
-  );
-  return skills.filter((s) => s !== null);
+  const folders = await skillFolders(skillsDir);
+  return folders.map(({ dir, md }) => {
+    const meta = skillMeta(md, basename(dir));
+    return {
+      ...meta,
+      dir,
+      enabled:
+        provider === 'claude'
+          ? !off.has(meta.name)
+          : overrides.get(join(dir, 'SKILL.md')) !== false,
+    };
+  });
 }
 
-// GAP: Codex's project skills and prompts, plugins a project's own settings turn on, and commands in subfolders aren't read;
+async function skillFolders(
+  root: string,
+  seen = new Set<string>(),
+  depth = 0,
+): Promise<{ dir: string; md: string }[]> {
+  if (depth > 4) return [];
+  const canonical = await realpath(root).catch(() => null);
+  if (!canonical || seen.has(canonical)) return [];
+  seen.add(canonical);
+  const md = await readText(join(root, 'SKILL.md')).catch(() => '');
+  if (md) return [{ dir: root, md }];
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const folders = entries.filter(
+    (entry) =>
+      (entry.isDirectory() || entry.isSymbolicLink()) &&
+      (!entry.name.startsWith('.') || entry.name === '.system'),
+  );
+  const skills = [];
+  for (const folder of folders.sort((a, b) => a.name.localeCompare(b.name)))
+    skills.push(
+      ...(await skillFolders(join(root, folder.name), seen, depth + 1)),
+    );
+  return skills;
+}
+
+// GAP: plugins a project's own settings turn on and commands in subfolders aren't read;
 // each shows once the agent reports its own list.
 async function claudeCommands(
   dir: string,
@@ -379,22 +418,74 @@ async function claudeCommands(
   return lists.flat().filter((c) => !off.has(c.name));
 }
 
+async function codexCommands(
+  dir: string,
+  settings: string,
+  projectRoot?: string,
+): Promise<ProviderConfig['commands']> {
+  const project = projectRoot && join(projectRoot, '.codex');
+  const plugins = await codexPluginRoots(dir, settings);
+  const lists = await Promise.all([
+    ...(project
+      ? [
+          skillsIn(join(project, 'skills')),
+          skillsIn(join(projectRoot!, '.agents', 'skills')),
+        ]
+      : []),
+    ...plugins.flatMap(({ name, root }) => [
+      skillsIn(join(root, 'skills'), `${name}:`),
+      skillsIn(
+        join(root, '.codex-plugin', 'migrated-command-skills'),
+        `${name}:`,
+      ),
+    ]),
+  ]);
+  const overrides = codexSkillOverrides(settings);
+  return lists
+    .flat()
+    .filter(
+      (command) => !command.path || overrides.get(command.path) !== false,
+    );
+}
+
 async function skillsIn(
   skillsDir: string,
   prefix = '',
 ): Promise<ProviderConfig['commands']> {
-  const folders = await readdir(skillsDir).catch(() => []);
-  const skills = await Promise.all(
-    folders
-      .filter((n) => !n.startsWith('.'))
-      .map(async (folder) => {
-        const md = await readText(join(skillsDir, folder, 'SKILL.md'));
-        if (!md) return [];
-        const meta = skillMeta(md, folder);
-        return [{ ...meta, name: `${prefix}${meta.name}`, isSkill: true }];
-      }),
+  const folders = await skillFolders(skillsDir);
+  return folders.map(({ dir, md }) => {
+    const meta = skillMeta(md, basename(dir));
+    return {
+      ...meta,
+      name: `${prefix}${meta.name}`,
+      path: join(dir, 'SKILL.md'),
+      isSkill: true,
+    };
+  });
+}
+
+async function codexPluginRoots(dir: string, settings: string) {
+  const roots = await Promise.all(
+    codexPlugins(settings).map(async (id) => {
+      const [name, marketplace] = id.split('@');
+      if (
+        !marketplace ||
+        basename(name) !== name ||
+        basename(marketplace) !== marketplace
+      )
+        return [];
+      const cache = join(dir, 'plugins', 'cache', marketplace, name);
+      const versions = await readdir(cache, { withFileTypes: true }).catch(
+        () => [],
+      );
+      const latest = versions
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0];
+      return latest ? [{ name, root: join(cache, latest) }] : [];
+    }),
   );
-  return skills.flat();
+  return roots.flat();
 }
 
 async function commandsIn(
