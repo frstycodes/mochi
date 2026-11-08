@@ -18,12 +18,12 @@ export function WorkedRow({
     ? row.startMs !== undefined && formatElapsed(elapsed)
     : formatElapsed(row.durationMs!);
   return (
-    <div className="-mx-4 border-b border-border pb-2 md:-mx-6">
+    <div className="border-b border-border pb-2">
       <button
         type="button"
         aria-expanded={row.isOpen}
         onClick={() => onToggle(row.key)}
-        className="mx-2 md:mx-4 flex h-7 w-fit cursor-default items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="-mx-2 flex h-7 w-fit cursor-default items-center gap-2 rounded-lg px-2 type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         <span>
           {isRunning ? 'Working' : 'Worked'}
