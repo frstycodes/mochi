@@ -1,16 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, Warning } from '@/icons';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ChevronDown } from '@/icons';
+import { BypassChecksDialog } from './BypassChecksDialog';
 import { Button } from '@/components/ui/button';
 import {
   ButtonGroup,
@@ -24,9 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
-import { plural } from '@mochi/domain/lib/format';
 import type { MergeMethod, MergeMode, PrCheck } from '../host/types/git';
-import { CheckList } from './Checks';
 
 export const MERGE_METHODS = {
   squash: {
@@ -71,6 +59,8 @@ export function useMergeFlow({
   base,
   tally,
   checks,
+  checksError,
+  onOpenChange,
   onMerge,
 }: {
   head: string;
@@ -78,23 +68,26 @@ export function useMergeFlow({
   tally: CheckTally;
   /** The checks themselves, listed in the dialog when known. */
   checks?: PrCheck[];
+  checksError?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onMerge: (method: MergeMethod, mode: MergeMode) => void;
 }) {
   const [asking, setAsking] = useState<MergeMethod | null>(null);
+  const setOpen = (method: MergeMethod | null) => {
+    setAsking(method);
+    onOpenChange?.(!!method);
+  };
   const request = (method: MergeMethod) =>
-    tally.failed + tally.running > 0
-      ? setAsking(method)
-      : onMerge(method, 'now');
+    tally.failed + tally.running > 0 ? setOpen(method) : onMerge(method, 'now');
   const dialog = (
     <BypassChecksDialog
       open={!!asking}
-      onOpenChange={(open) => !open && setAsking(null)}
+      onOpenChange={(open) => !open && setOpen(null)}
       head={head}
       base={base}
       tally={tally}
-      blocking={checks?.filter(
-        (c) => c.state === 'fail' || c.state === 'pending',
-      )}
+      checks={checks}
+      checksError={checksError}
       onBypass={() => asking && onMerge(asking, 'bypass')}
       onAutoMerge={() => asking && onMerge(asking, 'auto')}
     />
@@ -221,64 +214,5 @@ function MethodText({
           : 'Not allowed in this repository.'}
       </span>
     </span>
-  );
-}
-
-function BypassChecksDialog({
-  open,
-  onOpenChange,
-  head,
-  base,
-  tally,
-  blocking,
-  onBypass,
-  onAutoMerge,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  head: string;
-  base: string;
-  tally: CheckTally;
-  blocking?: PrCheck[];
-  onBypass: () => void;
-  onAutoMerge: () => void;
-}) {
-  const { failed, running } = tally;
-  const title = failed
-    ? `${failed} ${plural(failed, 'check', 'checks')} failing`
-    : `${running} ${plural(running, 'check', 'checks')} still running`;
-  return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="sm:max-w-lg">
-        <AlertDialogHeader>
-          <AlertDialogMedia className="bg-warning/10 text-warning">
-            <Warning />
-          </AlertDialogMedia>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>
-            <code className="font-mono text-xs">{head}</code> merges into{' '}
-            <code className="font-mono text-xs">{base}</code> without waiting
-            for them. If the branch requires these checks, your admin rights
-            bypass the rule.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {!!blocking?.length && (
-          <div className="max-h-40 overflow-y-auto rounded-lg border px-1 py-1">
-            <CheckList checks={blocking} />
-          </div>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel>Not yet</AlertDialogCancel>
-          {!failed && (
-            <AlertDialogAction variant="outline" onClick={onAutoMerge}>
-              Merge when ready
-            </AlertDialogAction>
-          )}
-          <AlertDialogAction variant="danger" onClick={onBypass}>
-            Bypass checks and merge
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }
