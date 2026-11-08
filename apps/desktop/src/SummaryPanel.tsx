@@ -44,8 +44,8 @@ import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent } from '@/components/ui/popover';
@@ -69,6 +69,8 @@ import {
   EDITOR_NAMES,
   openInEditor,
   useInstalledEditors,
+  revealPath,
+  REVEAL_IN,
 } from './files/editors';
 import { openFiles } from './files/viewer';
 import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
@@ -89,7 +91,7 @@ import { parentOf, subThreadsOf } from './reorder';
 import { useDispatch, shallowEqual, useHarnessSelector } from './store';
 import { summarize, type ThreadSummary } from './summary';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { OverflowIcon, TooltipIconButton } from './ui';
+import { TooltipIconButton } from './ui';
 import {
   isActive,
   stopTask,
@@ -487,26 +489,7 @@ function EnvironmentCard({ thread }: CardProps) {
           }
           label={machine?.name ?? here.name}
         />
-        <SummaryRow
-          icon={Folder}
-          label={
-            repo ? (
-              <span title={repo.path}>
-                {repo.project}
-                {!!repo.path && (
-                  <span className="text-subtle-foreground">
-                    {' '}
-                    · {homeShort(dirOf(repo.path))}
-                  </span>
-                )}
-              </span>
-            ) : (
-              'No project folder'
-            )
-          }
-        >
-          <FolderMenu thread={thread} />
-        </SummaryRow>
+        <FolderMenu thread={thread} />
         {!!repo && (
           <SummaryRow
             icon={
@@ -515,19 +498,18 @@ function EnvironmentCard({ thread }: CardProps) {
                 className="size-4 text-muted-foreground"
               />
             }
-            label={<BranchName repo={repo} title="Copy branch name" />}
+            label={<BranchName repo={repo} />}
+            hint={
+              worktree
+                ? `${repo.branch}\nWorktree: ${basenameOf(worktree)}`
+                : repo.branch
+            }
             onClick={
               repo.isDetached
                 ? undefined
                 : () => copyText(repo.branch, 'Branch name copied')
             }
-          >
-            {!!worktree && (
-              <span className="pointer-events-none max-w-24 truncate type-meta text-subtle-foreground">
-                {basenameOf(worktree)}
-              </span>
-            )}
-          </SummaryRow>
+          />
         )}
         {fullAccess && (
           <SummaryRow
@@ -1105,28 +1087,76 @@ function serverUrl(thread: Thread, server: string) {
 
 function FolderMenu({ thread }: { thread: Thread }) {
   const editors = useInstalledEditors();
+  const dispatch = useDispatch();
   const root = threadCwd(thread);
-  if (!root || editors.length === 0) return null;
+  const repo = thread.repo;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        disabled={!root}
         render={
-          <Button variant="ghost" size="icon-xs" aria-label="Folder options" />
+          <Item
+            render={<button type="button" />}
+            size="xs"
+            className="min-h-8 gap-2.5 px-2 py-1 text-left hover:bg-accent/60"
+          />
         }
       >
-        <OverflowIcon />
+        <ItemMedia>
+          <Folder className="size-4 text-muted-foreground" />
+        </ItemMedia>
+        <ItemContent className="min-w-0">
+          <ItemTitle className="w-full min-w-0 truncate font-normal">
+            {repo ? (
+              <span title={repo.path}>
+                {repo.project}
+                {!!repo.path && (
+                  <span className="text-subtle-foreground">
+                    {' '}
+                    · {homeShort(dirOf(repo.path))}
+                  </span>
+                )}
+              </span>
+            ) : (
+              'No project folder'
+            )}
+          </ItemTitle>
+        </ItemContent>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          {editors.map((editor) => (
-            <DropdownMenuItem
-              key={editor}
-              onClick={() => openInEditor(editor, root, '')}
-            >
-              Open in {EDITOR_NAMES[editor]}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem
+          disabled={!root}
+          onClick={() => root && revealPath(root, '')}
+        >
+          Show in {REVEAL_IN}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={!root}
+          onClick={() => root && copyText(root, 'Path copied')}
+        >
+          Copy path
+        </DropdownMenuItem>
+        {editors.map((editor) => (
+          <DropdownMenuItem
+            key={editor}
+            onClick={() => root && openInEditor(editor, root, '')}
+          >
+            Open in {EDITOR_NAMES[editor]}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() =>
+            dispatch({
+              type: 'pane-open-tab',
+              threadId: thread.id,
+              kind: 'terminal',
+            })
+          }
+        >
+          Open in terminal
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1354,11 +1384,13 @@ function AddSourceRow({ thread }: { thread: Thread }) {
 function SummaryRow({
   icon: Icon,
   label,
+  hint,
   onClick,
   children,
 }: {
   icon: IconComponent | ReactElement;
   label: ReactNode;
+  hint?: string;
   onClick?: () => void;
   children?: ReactNode;
 }) {
@@ -1395,6 +1427,7 @@ function SummaryRow({
         <button
           type="button"
           onClick={onClick}
+          title={hint}
           className="cursor-default text-left after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2"
         >
           {title}
