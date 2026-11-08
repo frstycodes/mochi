@@ -11,22 +11,22 @@
     "test": "vp test run --root ../.. packages/core/src"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.296",
-    "@effect/platform-node": "4.0.5",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.318",
+    "@effect/platform-node": "4.1.2",
     "@mochi/domain": "workspace:*",
     "@mochi/schema": "workspace:*",
     "@modelcontextprotocol/client": "2.4.0",
-    "@modelcontextprotocol/ext-apps": "2.0.3",
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/ext-apps": "2.0.4",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@octokit/graphql": "9.0.5",
-    "@parcel/watcher": "2.5.1",
-    "@pierre/diffs": "^1.5.2",
-    "effect": "4.0.5",
+    "@parcel/watcher": "2.6.0",
+    "@pierre/diffs": "^1.6.4",
+    "effect": "4.1.2",
     "electron-log": "5.4.4",
     "libsodium-wrappers": "0.8.4",
     "node-pty": "^1.1.0",
-    "playwright-core": "1.60.0",
-    "ws": "^8.22.0"
+    "playwright-core": "1.64.1",
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@types/ws": "^8.18.2",
