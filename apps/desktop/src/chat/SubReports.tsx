@@ -6,9 +6,9 @@ import { plural } from '@mochi/domain/lib/format';
 import type { ActivityEntry, SubReport } from '../model';
 import { clock } from '../progress';
 import { oneLine } from '../runtime/subagents';
-import { ProviderMark, StatusMark, type StatusMarkKind } from '../ui';
+import { StatusMark, type StatusMarkKind } from '../ui';
 import { FramedCard, FramedItem } from './FramedCard';
-import { ThreadMessageBody, ThreadName, usePeer } from './ThreadMessage';
+import { ThreadMessageBody, ThreadName } from './ThreadMessage';
 
 /**
  * Messages from sub-threads (their reports, and replies from messaged threads) logged back to back, as one card: what needs you first, each with its
@@ -87,20 +87,12 @@ function ReportItem({
   report: SubReport;
 }) {
   const [isOpen, setOpen] = useState(false);
-  const { thread } = usePeer(report);
   const preview = oneLine(entry.text);
   const status = statusLabel(report.status);
   return (
     <FramedItem className="gap-1 py-2.5">
       <div className="flex min-w-0 items-center gap-2 type-body">
         <StatusMark status={markOf(report)} label={status} />
-        {!!thread && (
-          <ProviderMark
-            provider={thread.providers[0]}
-            size={14}
-            className="shrink-0"
-          />
-        )}
         <ThreadName
           peer={report}
           className="max-w-none min-w-0 shrink font-medium"

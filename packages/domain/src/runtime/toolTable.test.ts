@@ -71,3 +71,33 @@ test('Codex is served no update_plan: it keeps its plan with its own', () => {
   assert.ok(!servedTools({ isCodex: true }).includes('update_plan'));
   assert.ok(servedTools({ isCodex: true }).includes('wrap_up'));
 });
+
+test('served delegation guidance defaults to native tools and model choice', () => {
+  for (const isCodex of [false, true]) {
+    for (const tool of ['start_subagent', 'create_thread'] as const) {
+      assert.ok(servedTools({ isCodex }).includes(tool));
+      const text = TOOL_TABLE[tool].description;
+      assert.match(
+        text,
+        /[Dd]efault to your native same-provider subagent tool and its native model choice/,
+      );
+      assert.match(text, /Preserve explicit user provider\/model requests/);
+      assert.match(
+        text,
+        /when the requested provider\/model is unavailable through your native tool or a concrete capability requirement cannot be met by native subagents/,
+      );
+      assert.doesNotMatch(
+        text,
+        /supports the model you want|start_subagent for a model it doesn't offer/,
+      );
+    }
+  }
+  assert.match(
+    TOOL_TABLE.start_subagent.description,
+    /Cross-provider delegation requires an explicit user provider\/model request or that concrete capability requirement/,
+  );
+  assert.match(
+    TOOL_TABLE.start_subagent.description,
+    /do not choose another provider merely for task size, cost, or a preferred model tier/,
+  );
+});

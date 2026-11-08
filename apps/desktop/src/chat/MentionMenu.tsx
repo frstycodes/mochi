@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   type ComponentProps,
@@ -8,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Chat, Plugin, ShieldAlert, Skill, Window } from '@/icons';
+import { Plugin, ShieldAlert, Skill, Window } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
@@ -132,7 +133,11 @@ export function MentionMenu({
   );
 }
 
-function MentionItem({ item }: { item: Exclude<MenuItem, { kind: 'scope' }> }) {
+export function MentionItem({
+  item,
+}: {
+  item: Exclude<MenuItem, { kind: 'scope' }>;
+}) {
   const names = useLibraryNames();
   if (item.kind === 'file')
     return (
@@ -197,7 +202,7 @@ function MentionItem({ item }: { item: Exclude<MenuItem, { kind: 'scope' }> }) {
     );
   return (
     <>
-      <Chat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <ThreadAgentMark thread={item.thread} />
       <span className="min-w-0 truncate">{item.thread.title}</span>
       <ItemMeta>{item.thread.repo?.project ?? 'No project'}</ItemMeta>
     </>

@@ -200,6 +200,8 @@ function BranchPicker({ workspace }: { workspace: Workspace }) {
         ...draft,
         base: b.name === list?.defaultBranch ? undefined : b.name,
       });
+    if (b.worktree && b.name !== list?.current)
+      return onChange({ mode: 'worktree', branch: b.name, isExisting: true });
     if (draft.mode === 'folder' && isDirty && b.name !== list?.current)
       return setSwitchTarget(b);
     onChange({
@@ -260,19 +262,12 @@ function BranchList({
   const selected = isNew ? (draft.base ?? list?.defaultBranch) : branch;
   const local = list?.branches.filter((b) => !b.isRemote) ?? [];
   const remote = list?.branches.filter((b) => b.isRemote) ?? [];
-  // Another checkout holding the branch blocks checking it out; the folder's own current branch is fine to stay on.
-  const blockedBy = (b: Branch) =>
-    !isNew &&
-    b.worktree &&
-    !(draft.mode === 'folder' && b.name === list?.current)
-      ? b.worktree
-      : undefined;
   const heading = isNew
     ? 'Start from'
     : draft.mode === 'worktree'
       ? 'Check out'
       : 'Switch to';
-  const rows = { list, selected, onChoose, blockedBy };
+  const rows = { list, selected, onChoose, isNew };
 
   return (
     <Command>
@@ -297,7 +292,7 @@ interface BranchRowsProps {
   list: BranchList | undefined;
   selected: string | undefined;
   onChoose: (b: Branch) => void;
-  blockedBy: (b: Branch) => string | undefined;
+  isNew: boolean;
 }
 
 function BranchGroup({
@@ -306,24 +301,23 @@ function BranchGroup({
   list,
   selected,
   onChoose,
-  blockedBy,
+  isNew,
 }: BranchRowsProps & { heading: string; branches: Branch[] }) {
   return (
     <CommandGroup heading={heading}>
       {branches.map((b) => {
-        const at = blockedBy(b);
+        const at = !isNew && b.worktree;
         return (
           <CommandItem
             key={b.name}
             value={b.name}
-            disabled={!!at}
             data-checked={b.name === selected}
             onSelect={() => onChoose(b)}
           >
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate">{b.name}</span>
               <span className="truncate type-caption text-subtle-foreground">
-                {at ? `In use at ${at}` : list && branchMeta(b, list)}
+                {at ? `Start in ${at}` : list && branchMeta(b, list)}
               </span>
             </span>
           </CommandItem>

@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { FoldChevron } from '@/Fold';
 import type { ActivityEntry, Thread, ThreadProposal } from '../model';
 import { useHarness, useHarnessSelector, useSpace } from '../store';
+import { ProviderMark } from '../ui';
 import { SubThreadState } from '../goals/SubThreads';
 import { threadStatus } from '../goals/VerdictChip';
 import { Expand } from '../WorkLog';
@@ -155,7 +156,7 @@ export function OfferCard({
       }
     >
       <FramedItem>
-        <ProposalTitle>{offer.title}</ProposalTitle>
+        <ProposalTitle provider={create.provider}>{offer.title}</ProposalTitle>
         <ProposalOptions
           proposalId={offer.id}
           create={create}
@@ -233,7 +234,9 @@ export function SuggestionCard({
         <FramedItem key={p.id}>
           <div className="flex items-start gap-2">
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <ProposalTitle>{p.title}</ProposalTitle>
+              <ProposalTitle provider={createOf(p).provider}>
+                {p.title}
+              </ProposalTitle>
               <p
                 className="line-clamp-2 type-meta text-muted-foreground [overflow-wrap:anywhere]"
                 title={p.brief}
@@ -290,10 +293,17 @@ export function SuggestionCard({
   );
 }
 
-function ProposalTitle({ children }: { children: ReactNode }) {
+function ProposalTitle({
+  provider,
+  children,
+}: {
+  provider: Create['provider'];
+  children: ReactNode;
+}) {
   return (
-    <p className="type-body font-medium text-pretty [overflow-wrap:anywhere]">
-      {children}
+    <p className="flex items-start gap-2 type-body font-medium text-pretty [overflow-wrap:anywhere]">
+      <ProviderMark provider={provider} size={16} className="mt-0.5" />
+      <span className="min-w-0">{children}</span>
     </p>
   );
 }

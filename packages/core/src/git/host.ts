@@ -110,7 +110,13 @@ export const git = {
         ],
       };
     }
-    const mergeBase = await runGit(top, ['merge-base', 'HEAD', base]).then(
+    const prHead =
+      scope === 'outside-pr' ? await publishedPrHead(top, branch) : undefined;
+    const mergeBase = await runGit(top, [
+      'merge-base',
+      'HEAD',
+      prHead ?? base,
+    ]).then(
       (s) => s.trim(),
       () => headOrEmptyTree(top),
     );
@@ -461,7 +467,7 @@ export type CoreServed = 'pr' | 'worktreePrs' | 'refStates';
 /**
  * The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. A new branch starts at
  * `base` (the default branch when unset); one that already exists (a restart after cleanup, or `isExisting`) is checked out,
- * refused when another worktree has it, and refused outright on an `isNew` start, which asked for a branch of its own.
+ * reusing its checkout when explicitly selected, and refused outright on an `isNew` start, which asked for a branch of its own.
  */
 export async function addWorktree(
   root: string,
@@ -490,15 +496,15 @@ export async function createWorktree(
   return { dir, isNew: true };
 }
 
-/** A restart's worktree that its title moved out of `<threadId>` (`nameThread`), found by the branch only it has checked out. */
+/** An explicitly selected branch reuses any checkout; a restart only rediscovers Mochi's own worktrees. */
 async function namedWorktree(
   top: string,
   branch: string,
   { isNew, isExisting }: WorktreeOptions,
 ) {
-  if (isNew || isExisting) return undefined;
+  if (isNew && !isExisting) return undefined;
   return (await listWorktrees(top)).find(
-    (w) => w.branch === branch && isUnderWorktreeRoot(w.path),
+    (w) => w.branch === branch && (isExisting || isUnderWorktreeRoot(w.path)),
   )?.path;
 }
 
@@ -586,4 +592,22 @@ function insideWorktreeRoot(path: string) {
 
 function isUnderWorktreeRoot(path: string) {
   return worktreeRoots().some((root) => path.startsWith(root + sep));
+}
+
+async function publishedPrHead(cwd: string, branch: string) {
+  try {
+    const pr = JSON.parse(
+      await runGh(
+        cwd,
+        ['pr', 'view', '--json', 'headRefName,headRefOid'],
+        undefined,
+      ),
+    ) as { headRefName: string; headRefOid: string };
+    if (pr.headRefName !== branch || !/^[a-f0-9]{40}$/.test(pr.headRefOid))
+      return undefined;
+    // A head absent locally cannot safely replace the branch comparison.
+    return (await resolveCommit(cwd, pr.headRefOid)) || undefined;
+  } catch {
+    return undefined;
+  }
 }

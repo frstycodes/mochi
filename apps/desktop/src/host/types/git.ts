@@ -19,8 +19,8 @@ export interface GitStatus {
   upstream?: { ahead: number; behind: number };
 }
 
-/** `branch`: the worktree (committed or not) against its merge base with the base branch. `uncommitted`: staged and unstaged changes. */
-export type DiffScope = 'branch' | 'uncommitted';
+/** `branch`: the worktree (committed or not) against its merge base with the base branch. `uncommitted`: staged and unstaged changes. `outside-pr`: against the published PR head, falling back to the branch base. */
+export type DiffScope = 'branch' | 'uncommitted' | 'outside-pr';
 
 export type ChangeKind =
   | 'modified'

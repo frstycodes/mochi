@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import { useRef, useState, type ReactElement } from 'react';
 import { Eye, EyeOff, Sparkles } from '@/icons';
 import { Button } from '@/components/ui/button';
@@ -105,6 +106,7 @@ function PeekCard({
   return (
     <>
       <div className="flex items-center gap-2">
+        <ThreadAgentMark thread={thread} />
         <StatusMark status={thread.status} size="icon" />
         <span className="min-w-0 flex-1 truncate type-title">
           {thread.title}

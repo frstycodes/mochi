@@ -1,3 +1,4 @@
+import { ThreadAgentMark } from '../threadRow';
 import {
   Command,
   CommandDialog,
@@ -76,6 +77,7 @@ export function CommandPalette({
                 value={`${t.title} ${t.repo?.branch ?? ''} ${t.id}`}
                 onSelect={() => go(t.id)}
               >
+                <ThreadAgentMark thread={t} />
                 <StatusMark status={t.status} size="icon" />
                 <span className="truncate">{t.title}</span>
                 <ThreadMachineMark

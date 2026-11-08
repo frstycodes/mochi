@@ -19,6 +19,7 @@ import {
 import {
   ThreadDetailText,
   ThreadProjectMark,
+  ThreadAgentMark,
   rowStatusMark,
   useThreadRow,
 } from './threadRow';
@@ -96,7 +97,7 @@ function useSwitcherThreads() {
 }
 
 /** The glass panel over the app: one row per thread like the sidebar's, the pick filled; a click picks one. */
-function SwitcherPanel({
+export function SwitcherPanel({
   threads,
   pickedId,
   currentId,
@@ -134,7 +135,7 @@ function SwitcherPanel({
 }
 
 // The pick is a fill, never a ring: a box-shadow ring doesn't follow the global squircle corner and smears at the corners.
-function SwitcherRow({
+export function SwitcherRow({
   thread,
   isPicked,
   isCurrent,
@@ -164,10 +165,11 @@ function SwitcherRow({
           : 'hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
       )}
     >
-      <ThreadProjectMark thread={thread} />
+      <ThreadAgentMark thread={thread} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate type-prose font-medium">{thread.title}</span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
+          <ThreadProjectMark thread={thread} />
           <ThreadMachineMark threadId={thread.id} />
           <ThreadDetailText row={row} />
         </span>

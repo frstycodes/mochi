@@ -21,7 +21,11 @@ export const GitStatus = Schema.Struct({
 });
 export type GitStatus = typeof GitStatus.Type;
 
-export const DiffScope = Schema.Literals(['branch', 'uncommitted']);
+export const DiffScope = Schema.Literals([
+  'branch',
+  'uncommitted',
+  'outside-pr',
+]);
 export type DiffScope = typeof DiffScope.Type;
 
 export const ChangeKind = Schema.Literals([

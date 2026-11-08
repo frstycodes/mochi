@@ -833,7 +833,7 @@ function ChangesCard({
   );
 }
 
-/** The branch against its base, as the Changes pane shows it by default: edits made through shell commands count too. */
+/** PR work is already represented by its own row. */
 function BranchChanges({
   thread,
   cwd,
@@ -847,7 +847,11 @@ function BranchChanges({
   outputs: Outputs;
   open: CardProps['open'];
 }) {
-  const diffQuery = useGitDiff(cwd, 'branch', thread.repo?.base);
+  const diffQuery = useGitDiff(
+    cwd,
+    prs.length ? 'outside-pr' : 'branch',
+    thread.repo?.base,
+  );
   return (
     <ChangesBody
       thread={thread}
