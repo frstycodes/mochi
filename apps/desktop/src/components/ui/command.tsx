@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 import { cn } from "@/lib/utils"
+import { forwardMenuNav } from "@/chat/menuNav"
 
 import {
   Dialog,
@@ -17,6 +18,7 @@ import { Search as SearchIcon, Check as CheckIcon } from '@/icons'
 
 function Command({
   className,
+  onKeyDownCapture,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -27,6 +29,14 @@ function Command({
         className
       )}
       {...props}
+      vimBindings={false}
+      onKeyDownCapture={(event) => {
+        onKeyDownCapture?.(event)
+        if (event.defaultPrevented || event.key === 'ArrowDown' || event.key === 'ArrowUp') return
+        if (!forwardMenuNav(event.nativeEvent, event.currentTarget)) return
+        event.preventDefault()
+        event.stopPropagation()
+      }}
     />
   )
 }

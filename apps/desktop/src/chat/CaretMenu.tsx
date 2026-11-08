@@ -74,10 +74,3 @@ export function CaretMenu({
     </Popover>
   );
 }
-
-/** Forward an editor key to the cmdk list so it moves its own highlight. */
-export function forwardKey(list: HTMLElement | null, e: KeyboardEvent) {
-  list?.dispatchEvent(
-    new KeyboardEvent('keydown', { key: e.key, bubbles: true }),
-  );
-}

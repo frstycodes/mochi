@@ -125,8 +125,11 @@ export function browseEntries(
 /** What the composer holds for a file label: `@src/a.ts`, quoted when it has a space (`@"my notes/a.md"`). */
 export const tokenText = (label: string) => `@${quoted(label)}`;
 
-/** A mention typed inline: a file as its `tokenText`, a thread as `@` and its title, spaces and all. */
-type InlineMention = { kind: 'file' | 'thread'; title: string };
+/** A mention typed inline: a file as its `tokenText`, all others as `@` and their title, spaces and all. */
+type InlineMention = {
+  kind: 'file' | 'thread' | 'window' | 'skill' | 'mcp' | 'plugin';
+  title: string;
+};
 const inlineText = (mention: InlineMention) =>
   mention.kind === 'file' ? tokenText(mention.title) : `@${mention.title}`;
 

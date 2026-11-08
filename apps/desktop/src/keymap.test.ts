@@ -411,3 +411,11 @@ test('H4 commands match their physical defaults, accept a rebind, and stop on th
     'annotation cannot take an OS shortcut',
   );
 });
+
+test('autocomplete shortcuts may shadow global commands but conflict within the menu', () => {
+  assert.equal(conflictOf('menu-next', ['mod', 'N'], {}, false), undefined);
+  assert.equal(
+    conflictOf('menu-next', ['mod', 'P'], {}, false),
+    'menu-previous',
+  );
+});

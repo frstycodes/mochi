@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Chat, Plugin, ShieldAlert, Skill, Window, X } from '@/icons';
+import { Chat, Plugin, ShieldAlert, Skill, Window } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { plural } from '@mochi/domain/lib/format';
@@ -22,16 +22,15 @@ import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import { localIo, useFileList } from '../files/useFiles';
 import { useRecentFiles } from '../pane/recentFiles';
-import type { AgentImage } from '../host/types/agent';
 import type { ScreenAccess } from '../host/types/windows';
 import type { AgentCommand, McpServer, Thread } from '../model';
-import { openPhotos } from '../photo/photos';
 import { useRemoteMachine } from '../remote/origin';
 import { useMachineFiles } from '../remote/useMachines';
 import { useHarnessSelector } from '../store';
 import { isSameListing } from '../reorder';
 import { useLibraryNames } from '../library/names';
-import { CaretMenu, forwardKey } from './CaretMenu';
+import { CaretMenu } from './CaretMenu';
+import { forwardMenuNav } from './menuNav';
 import { MENTION_DROP_EVENT, useDragSelector } from '../layout/drag';
 import { isInside } from '../pane/headerPins';
 import { FileMark } from './FileMark';
@@ -48,11 +47,12 @@ import {
 } from './fileMentions';
 import { McpServerMark, PluginMark, SkillMark } from './McpIcon';
 import {
-  isInline,
   mentionFor,
   mentionGroups,
   mentionOptions,
   mentionQuery,
+  mentionSearch,
+  mentionPrefixes,
   optionId,
   withoutQuery,
   type FileOption,
@@ -61,7 +61,10 @@ import {
 } from './mentions';
 import { queryKeys } from '../queryKeys';
 
-type MenuItem = MentionOption | { kind: 'permission' };
+type MenuItem =
+  | MentionOption
+  | { kind: 'permission' }
+  | { kind: 'scope'; prefix: string };
 
 /**
  * Above the caret while the text ends in `@` and part of a name: the worktree's files, threads, windows, skills,
@@ -72,7 +75,10 @@ export function MentionMenu({
 }: {
   menu: ReturnType<typeof useMentionMenu>;
 }) {
-  const groups = mentionGroups(menu.items);
+  const groups = mentionGroups(
+    menu.items.filter((item) => item.kind !== 'scope'),
+  );
+  const prefixes = menu.items.filter((item) => item.kind === 'scope');
   return (
     <CaretMenu
       isOpen={menu.isOpen}
@@ -83,6 +89,28 @@ export function MentionMenu({
       onValueChange={menu.setActiveKey}
       onDismiss={menu.dismiss}
     >
+      {prefixes.length > 0 && (
+        <CommandGroup heading="Search in">
+          {prefixes.map((item) => (
+            <CommandItem
+              key={itemKey(item)}
+              value={itemKey(item)}
+              onSelect={() => menu.choose(item)}
+              className="h-8 rounded-md type-body"
+            >
+              <span>{item.prefix}:</span>
+              <span className="text-muted-foreground">
+                Search {item.prefix}
+              </span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      )}
+      {menu.items.length === 0 && (
+        <div className="px-3 py-2 type-body text-muted-foreground">
+          No matching references
+        </div>
+      )}
       {groups.map((group) => (
         <CommandGroup
           key={group.kind}
@@ -104,7 +132,7 @@ export function MentionMenu({
   );
 }
 
-function MentionItem({ item }: { item: MenuItem }) {
+function MentionItem({ item }: { item: Exclude<MenuItem, { kind: 'scope' }> }) {
   const names = useLibraryNames();
   if (item.kind === 'file')
     return (
@@ -222,101 +250,10 @@ function WindowIcon({ icon }: { icon?: string }) {
   return <img src={icon} alt="" className="size-4 shrink-0" />;
 }
 
-/** The picked references as removable chips inside the composer, above the text. A window chip shows its screenshot. */
-export function MentionChips({
-  menu,
-}: {
-  menu: ReturnType<typeof useMentionMenu>;
-}) {
-  const names = useLibraryNames();
-  const chips = menu.mentions.filter(
-    (m) => m.kind !== 'file' && m.kind !== 'thread',
-  );
-  if (chips.length === 0) return null;
-  return (
-    <ul aria-label="References" className="flex flex-wrap gap-1.5 px-3 pt-3">
-      {chips.map((m) => (
-        <li
-          key={m.id}
-          className="flex h-7 max-w-64 items-center gap-1.5 rounded-full border bg-background/40 pr-1 pl-1.5 type-meta"
-        >
-          {m.kind === 'window' ? (
-            <button
-              type="button"
-              aria-label={`View screenshot of ${m.title}`}
-              onClick={() =>
-                openPhotos({
-                  photos: [{ src: dataUrl(m.image), name: m.title }],
-                  index: 0,
-                })
-              }
-              className="h-5 w-7 shrink-0 cursor-zoom-in overflow-hidden rounded-sm"
-            >
-              <img
-                src={dataUrl(m.image)}
-                alt=""
-                className="size-full object-cover object-top"
-              />
-            </button>
-          ) : (
-            <ChipIcon mention={m} />
-          )}
-          <span
-            className={cn(
-              'min-w-0 truncate',
-              m.kind !== 'window' && 'text-info',
-            )}
-            title={
-              m.kind === 'skill'
-                ? m.description
-                : m.kind === 'mcp' || m.kind === 'plugin'
-                  ? m.title
-                  : undefined
-            }
-          >
-            {m.kind === 'skill'
-              ? names.skill(m.title).title
-              : m.kind === 'mcp'
-                ? names.server(m.title).title
-                : m.kind === 'plugin'
-                  ? names.plugin(m.title).title
-                  : m.title}
-          </span>
-          {m.kind === 'mcp' && m.toolCount !== undefined && (
-            <span className="shrink-0 type-caption text-subtle-foreground tabular">
-              {m.toolCount}
-            </span>
-          )}
-          <button
-            type="button"
-            aria-label={`Remove ${m.title}`}
-            onClick={() => menu.remove(m.id)}
-            className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ChipIcon({
-  mention,
-}: {
-  mention: Exclude<Mention, { kind: 'window' | 'file' | 'thread' }>;
-}) {
-  if (mention.kind === 'skill')
-    return <SkillMark skill={mention.title} fallback={<SkillFallback />} />;
-  if (mention.kind === 'plugin')
-    return <PluginMark plugin={mention.title} fallback={<PluginFallback />} />;
-  return <McpServerMark server={mention.title} />;
-}
-
 /**
  * The menu's state, the picked references and the editor props that drive them: arrows move (cmdk does the moving), Enter or Tab picks, Esc
- * closes until the text changes, Backspace in an empty input drops the last chip. While browsing a folder, Tab or `/` on a
- * folder enters it, and Backspace or ← on an empty segment goes up one. A picked file or thread goes into the text as a
+ * closes until the text changes. While browsing a folder, Tab or `/` on a
+ * folder enters it, and Backspace or ← on an empty segment goes up one. Every picked reference goes into the text as a
  * token where the `@` was. Needs the composer's `PromptInputProvider`.
  */
 export function useMentionMenu(
@@ -334,17 +271,20 @@ export function useMentionMenu(
   const [dismissedAt, setDismissedAt] = useState<string>();
   const [picks, setMentions] = useState<Mention[]>([]);
   const text = textInput.value;
-  // A file or thread whose token you deleted from the text is no longer a reference.
-  const mentions = picks.filter((m) =>
-    m.kind === 'file' || m.kind === 'thread'
-      ? mentionTokens(text, [m]).length > 0
-      : true,
+  const mentions = picks.filter(
+    (mention) => mentionTokens(text, [mention]).length > 0,
   );
   const query = mentionQuery(text);
   const isQuerying = query !== null && dismissedAt !== text;
-  const browse = query === null ? null : browseQuery(query);
-  const screen = useAppWindows(isQuerying && !browse);
-  const fileOptions = useFileOptions(isQuerying ? query : null, files);
+  const search = mentionSearch(query ?? '');
+  const includesFiles = !search.kind || search.kind === 'file';
+  const includesWindows = !search.kind || search.kind === 'window';
+  const browse = includesFiles ? browseQuery(search.query) : null;
+  const screen = useAppWindows(isQuerying && includesWindows && !browse);
+  const fileOptions = useFileOptions(
+    isQuerying && includesFiles ? search.query : null,
+    files,
+  );
 
   const picked = new Set(mentions.map((m) => m.id));
   const others = browse
@@ -358,22 +298,36 @@ export function useMentionMenu(
         servers,
         plugins,
       ).filter((o) => !picked.has(optionId(o)));
-  const options = [...fileOptions, ...others];
-  const items: MenuItem[] =
-    !browse && isBlocked(screen.access)
-      ? [...options, { kind: 'permission' }]
-      : options;
-  const isOpen = isQuerying && items.length > 0;
+  const options = mentionGroups([...fileOptions, ...others]).flatMap(
+    (group) => group.items,
+  );
+  const prefixes = mentionPrefixes(query ?? '').map((prefix) => ({
+    kind: 'scope' as const,
+    prefix,
+  }));
+  const items: MenuItem[] = [
+    ...prefixes,
+    ...options,
+    ...(includesWindows && !browse && isBlocked(screen.access)
+      ? [{ kind: 'permission' as const }]
+      : []),
+  ];
+  const isOpen = isQuerying;
   const current = items.find((item) => itemKey(item) === activeKey) ?? items[0];
 
   const add = (mention: Mention) =>
     setMentions((all) => [...all.filter((m) => m.id !== mention.id), mention]);
-  const choose = async (item: MenuItem) => {
+  const choose = async (item: MenuItem | undefined) => {
+    if (!item) return;
     if (item.kind === 'permission')
       return host.windows.openScreenRecordingSettings();
     setActiveKey(undefined);
+    if (item.kind === 'scope') {
+      textInput.setInput(`${withoutQuery(text)}@${item.prefix}:`);
+      return;
+    }
     if (item.kind === 'window') {
-      textInput.setInput(withoutQuery(text));
+      textInput.setInput(`${withoutQuery(text)}@${item.window.title} `);
       const image = await host.windows.captureApp(item.window.id);
       if (!image)
         return toast(`Couldn't capture "${item.window.title}"`, {
@@ -390,18 +344,16 @@ export function useMentionMenu(
     }
     const mention = mentionFor(item);
     textInput.setInput(
-      isInline(mention)
-        ? `${withoutQuery(text)}${mention.kind === 'file' ? tokenText(mention.title) : `@${mention.title}`} `
-        : withoutQuery(text),
+      `${withoutQuery(text)}${mention.kind === 'file' ? tokenText(mention.title) : `@${mention.title}`} `,
     );
     add(mention);
   };
   const browseTo = (dir: string) => {
     setActiveKey(undefined);
-    textInput.setInput(`${withoutQuery(text)}@${dir}`);
+    textInput.setInput(
+      `${withoutQuery(text)}@${search.kind === 'file' ? 'files:' : ''}${dir}`,
+    );
   };
-  const remove = (id: string) =>
-    setMentions((all) => all.filter((m) => m.id !== id));
   /** A thread dropped on the composer: its token at the end of the text, as if picked from the menu. */
   const mentionThread = (threadId: string) => {
     const thread = threads.find((t) => t.id === threadId);
@@ -414,19 +366,18 @@ export function useMentionMenu(
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!isOpen) {
-      const last = mentions.findLast((m) => !isInline(m));
-      if (e.key === 'Backspace' && text === '' && last) remove(last.id);
-      return;
-    }
+    if (!isOpen) return;
     const folder =
-      browse && current.kind === 'file' && current.mention.isDir
+      browse && current?.kind === 'file' && current.mention.isDir
         ? current.mention.title
         : null;
     const up = browse && browse.filter === '' ? parentDir(browse.dir) : null;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp')
-      forwardKey(listRef.current, e);
-    else if (folder && (e.key === 'Tab' || e.key === '/')) browseTo(folder);
+    if (forwardMenuNav(e, listRef.current)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (folder && (e.key === 'Tab' || e.key === '/')) browseTo(folder);
     else if (up && (e.key === 'Backspace' || e.key === 'ArrowLeft'))
       browseTo(up);
     else if (e.key === 'Enter' || e.key === 'Tab') void choose(current);
@@ -448,9 +399,7 @@ export function useMentionMenu(
       ...all,
       ...list.filter((m) => !all.some((a) => a.id === m.id)),
     ]);
-  const inlineMentions = mentions.filter(
-    (m) => m.kind === 'file' || m.kind === 'thread',
-  );
+
   return {
     listId,
     items,
@@ -461,8 +410,7 @@ export function useMentionMenu(
     isOpen,
     choose,
     mentions,
-    inlineMentions,
-    remove,
+    inlineMentions: mentions,
     mentionThread,
     restore,
     clear: () => setMentions([]),
@@ -594,6 +542,8 @@ function useAppWindows(isOpen: boolean) {
 const isBlocked = (access: ScreenAccess) =>
   access === 'denied' || access === 'restricted';
 const itemKey = (item: MenuItem) =>
-  item.kind === 'permission' ? 'permission' : optionId(item);
-const dataUrl = (image: AgentImage) =>
-  `data:${image.mediaType};base64,${image.data}`;
+  item.kind === 'permission'
+    ? 'permission'
+    : item.kind === 'scope'
+      ? `scope:${item.prefix}`
+      : optionId(item);

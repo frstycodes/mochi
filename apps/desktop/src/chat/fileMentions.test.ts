@@ -146,6 +146,40 @@ test('tokens are whole words and quoted when the label has a space', () => {
   );
 });
 
+test('mentionTokens resolves skill, plugin, mcp, and window mentions by @title', () => {
+  const skill = { kind: 'skill' as const, title: 'My Skill' };
+  const plugin = { kind: 'plugin' as const, title: 'My Plugin' };
+  const mcp = { kind: 'mcp' as const, title: 'My Server' };
+  const win = { kind: 'window' as const, title: 'My Window' };
+  assert.deepEqual(
+    mentionTokens('@My Skill @My Plugin @My Server @My Window', [
+      skill,
+      plugin,
+      mcp,
+      win,
+    ]).map((t) => [t.mention.kind, t.mention.title]),
+    [
+      ['skill', 'My Skill'],
+      ['plugin', 'My Plugin'],
+      ['mcp', 'My Server'],
+      ['window', 'My Window'],
+    ],
+    'all non-file kinds match @title with spaces',
+  );
+  assert.equal(
+    mentionTokens('@Missing', [skill]).length,
+    0,
+    'wrong title does not match',
+  );
+});
+
+test('a mention token removed from the text is no longer found', () => {
+  const skill = { kind: 'skill' as const, title: 'Test Skill' };
+  assert.equal(mentionTokens('@Test Skill do the thing', [skill]).length, 1);
+  assert.equal(mentionTokens('do the thing', [skill]).length, 0);
+  assert.equal(mentionTokens('', [skill]).length, 0);
+});
+
 test('each harness gets the path in the form it reads', () => {
   const inside = worktreeMention('src/a.ts');
   const outside = fileMentionFor(

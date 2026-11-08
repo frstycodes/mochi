@@ -21,7 +21,8 @@ import { useRemoteMachine } from '../remote/origin';
 import { useMachineCatalog } from '../remote/useMachines';
 import { useHarnessSelector } from '../store';
 import type { Caret } from './ComposerEditor';
-import { CaretMenu, forwardKey } from './CaretMenu';
+import { CaretMenu } from './CaretMenu';
+import { forwardMenuNav } from './menuNav';
 import { ItemMeta, SkillFallback } from './MentionMenu';
 import { SkillMark } from './McpIcon';
 import {
@@ -163,10 +164,11 @@ export function useSlashMenu(items: SlashItem[]) {
   const onKeyDown = (e: KeyboardEvent, view: EditorView) => {
     editor.current = view;
     if (!isOpen) return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp')
-      forwardKey(listRef.current, e);
-    else if (e.key === 'Enter' || e.key === 'Tab') choose(matches[index]);
-    else return setActiveKey(undefined);
+    if (e.key === 'Enter' || e.key === 'Tab') choose(matches[index]);
+    else if (!forwardMenuNav(e, listRef.current)) {
+      setActiveKey(undefined);
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
   };
