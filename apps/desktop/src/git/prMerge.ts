@@ -1,11 +1,13 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../queryKeys';
 import { toast } from '@/toast/store';
 import { refreshRef } from '../chat/useRefState';
 import { useThreadCalls } from '../remote/threadCalls';
 import type { MergeMethod, MergeMode } from '../host/types/git';
 import type { Thread } from '../model';
 import { setPrefs, usePrefs } from '../settings/prefs';
-import { pickMethod, useMergeFlow } from './MergeButton';
+import { checkTally, pickMethod, useMergeFlow } from './MergeButton';
 import { gitError } from './useGit';
 import { useGithubScope, type ThreadPr } from './useThreadPrs';
 
@@ -44,10 +46,24 @@ export function useThreadPrMerge(thread: Thread, item: ThreadPr) {
     }
   };
 
+  const [isConfirming, setConfirming] = useState(false);
+  const checksQuery = useQuery({
+    queryKey: queryKeys.git.review(calls?.key ?? '', pr.number),
+    queryFn: () => calls!.prReview(pr.number),
+    enabled: isConfirming && !!calls,
+    refetchInterval: isConfirming ? 30_000 : false,
+  });
+  const review = checksQuery.data;
   const flow = useMergeFlow({
-    head: state.branch?.head ?? '',
-    base: state.branch?.base ?? '',
-    tally: state.checkCounts ?? NO_CHECKS,
+    head: review?.head ?? state.branch?.head ?? '',
+    base: review?.base ?? state.branch?.base ?? '',
+    tally:
+      isConfirming && review
+        ? checkTally(review.checks)
+        : (state.checkCounts ?? NO_CHECKS),
+    checks: review?.checks ?? (checksQuery.isSuccess ? [] : undefined),
+    checksError: checksQuery.isError,
+    onOpenChange: setConfirming,
     onMerge: merge,
   });
   const allowed = state.mergeMethods ?? [];
