@@ -1008,8 +1008,9 @@
   transition: none;
 }
 
-/* Pinned passages in chat messages (CSS Custom Highlight API, src/chat/SelectionPin.tsx): a neutral highlighter, not a status colour. */
-::highlight(harness-pin) {
+/* Pinned passages in chat messages (CSS Custom Highlight API, src/chat/SelectionPin.tsx) and the passage a Logbook row opened (src/logbook/passage.ts): a neutral highlighter, not a status colour. */
+::highlight(harness-pin),
+::highlight(harness-logbook) {
   background-color: color-mix(in oklab, var(--foreground) 16%, transparent);
 }
 

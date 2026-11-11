@@ -42,7 +42,8 @@ export function LogbookRows({
   kind: LogbookKind;
   log: Logbook;
   now: number;
-  onOpen: (index: number) => void;
+  /** `about`: the row's own words, to find the passage they came from. */
+  onOpen: (index: number, about: string) => void;
   onRemove: (answer: LoggedAnswer) => void;
 }) {
   return (
@@ -55,7 +56,7 @@ export function LogbookRows({
               key={a.key}
               answer={a}
               age={timeAgo(now - a.at)}
-              onOpen={() => onOpen(a.index)}
+              onOpen={() => onOpen(a.index, `${a.question} ${a.summary}`)}
               onRemove={() => onRemove(a)}
             />
           ))}
@@ -67,7 +68,7 @@ export function LogbookRows({
               key={d.key}
               decision={d}
               age={timeAgo(now - d.at)}
-              onOpen={() => onOpen(d.index)}
+              onOpen={() => onOpen(d.index, d.text)}
             />
           ))}
       {kind === 'proposals' &&
@@ -78,7 +79,7 @@ export function LogbookRows({
               key={p.key}
               proposal={p}
               age={timeAgo(now - p.at)}
-              onOpen={() => onOpen(p.index)}
+              onOpen={() => onOpen(p.index, `${p.title} ${p.brief}`)}
             />
           ))}
     </PaneList>

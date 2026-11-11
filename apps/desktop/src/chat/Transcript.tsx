@@ -16,6 +16,7 @@ import { ErrorFallback } from '@/components/ErrorFallback';
 import { Button } from '@/components/ui/button';
 import { ArrowDown } from '@/icons';
 import { cn } from '@/lib/utils';
+import { highlightPassage } from '../logbook/passage';
 import type { ChatRow } from './rows';
 
 export interface RememberedScroll {
@@ -185,11 +186,16 @@ function useRevealCard(rows: ChatRow[], list: RefObject<LegendListRef | null>) {
 }
 
 const REVEAL_MESSAGE = 'chat-reveal-message';
-let pendingReveal: { threadId: string; index: number } | undefined;
+let pendingReveal:
+  | { threadId: string; index: number; about?: string }
+  | undefined;
 
-/** Scrolls thread `threadId`'s transcript to the message at activity `index`, now or once that thread's transcript mounts. */
-export function revealMessage(threadId: string, index: number) {
-  pendingReveal = { threadId, index };
+/**
+ * Scrolls thread `threadId`'s transcript to the message at activity `index`, now or once that thread's transcript mounts, and
+ * highlights the passage `about` came from.
+ */
+export function revealMessage(threadId: string, index: number, about?: string) {
+  pendingReveal = { threadId, index, about };
   window.dispatchEvent(new Event(REVEAL_MESSAGE));
 }
 
@@ -201,13 +207,15 @@ function useRevealMessage(
   useEffect(() => {
     const reveal = () => {
       if (pendingReveal?.threadId !== threadId) return;
-      const { index } = pendingReveal;
+      const { index, about } = pendingReveal;
       const row = rows.findIndex(
         (r) => r.kind === 'message' && r.index === index,
       );
       if (row < 0) return;
       pendingReveal = undefined;
       void list.current?.scrollToIndex({ index: row, viewPosition: 0.2 });
+      const scroller = list.current?.getScrollableNode();
+      if (about && scroller) highlightPassage(scroller, index, about);
     };
     reveal();
     window.addEventListener(REVEAL_MESSAGE, reveal);
