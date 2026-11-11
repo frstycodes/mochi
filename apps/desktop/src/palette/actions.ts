@@ -48,6 +48,7 @@ import {
   Share,
   X,
   type IconComponent,
+  Book,
 } from '@/icons';
 import { ForkIcon } from '../ui';
 import { toast } from '../toast/store.ts';
@@ -150,6 +151,14 @@ export const ACTIONS = [
     icon: Folder,
     keywords: 'folder repository clone add',
     run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'projects' } }),
+  },
+  {
+    id: 'go-logbook',
+    group: 'Go to',
+    title: 'Logbook',
+    icon: Book,
+    keywords: 'questions answers decisions assumptions later suggested saved',
+    run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'logbook' } }),
   },
   {
     id: 'go-settled',

@@ -100,6 +100,7 @@ import { SubReportsBlock } from './sections/sub-reports';
 import { WorkLogDetailBlock } from './sections/work-log-detail';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { TiltedDragBlock } from './sections/tilted-drag';
+import { LogbookBlock } from './sections/logbook';
 import { ThreadProposalsBlock } from './sections/thread-proposals';
 import { MergeButtonBlock } from './sections/merge-button';
 import { SummaryPanel } from '../SummaryPanel';
@@ -1122,6 +1123,7 @@ function Recipes() {
         />
         <TiltedDragBlock rl={rl} />
         <ThreadProposalsBlock />
+        <LogbookBlock />
         <MergeButtonBlock />
         {verdictFixtures(rl).map(({ label, thread }) => (
           <Block

@@ -7,22 +7,25 @@ export type SummaryCardId =
   | 'running'
   | 'changes'
   | 'threads'
+  | 'logbook'
   | 'sources'
   | 'environment';
 
-/** The cards with something to show, most glanced-at first: what runs now, what it made, what it's tied to, what it used, then where it runs. */
+/** The cards with something to show, most glanced-at first: what runs now, what it made, what it's tied to, what it's worth coming back for, what it used, then where it runs. */
 export function summaryCards({
   thread,
   summary,
   linkedThreadCount,
   portCount,
   outputCount,
+  logbookCount,
 }: {
   thread: Thread;
   summary: ThreadSummary;
   linkedThreadCount: number;
   portCount: number;
   outputCount: number;
+  logbookCount: number;
 }): SummaryCardId[] {
   const cards: (SummaryCardId | false)[] = [
     (activeTasks(thread).length > 0 || portCount > 0) && 'running',
@@ -32,6 +35,7 @@ export function summaryCards({
       outputCount > 0) &&
       'changes',
     linkedThreadCount > 0 && 'threads',
+    logbookCount > 0 && 'logbook',
     'sources',
     'environment',
   ];

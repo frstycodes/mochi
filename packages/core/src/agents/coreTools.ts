@@ -37,6 +37,7 @@ export const CORE_TOOLS = new Set<ToolName>([
   'send_to_thread',
   'send_files',
   'wrap_up',
+  'record_answer',
   'report_to_parent',
   'update_plan',
   'start_subagent',

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import {
   ArrowLeft,
@@ -39,6 +39,8 @@ import {
   PaneSection,
   PaneSectionHeader,
   PaneSectionTitle,
+  RowActions,
+  RowButton,
 } from './PaneList';
 import type { PaneTabProps } from './tabs';
 
@@ -214,26 +216,6 @@ function VisualItem({
         }
       />
     </PaneListItem>
-  );
-}
-
-// Stretched over the row (the item is `relative`) so a click anywhere opens it; `RowActions` sit above it.
-function RowButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className="truncate text-left after:absolute after:inset-0 focus-visible:outline-none"
-      onClick={onClick}
-      title={label}
-    >
-      {label}
-    </button>
-  );
-}
-
-function RowActions({ children }: { children: ReactNode }) {
-  return (
-    <span className="relative z-10 flex items-center gap-0.5">{children}</span>
   );
 }
 

@@ -106,3 +106,30 @@ export function PaneListItemTrail({
     </ItemActions>
   );
 }
+
+// Stretched over the row (the item is `relative`) so a click anywhere opens it; `RowActions` sit above it.
+export function RowButton({
+  label,
+  className,
+  ...props
+}: { label: string } & ComponentProps<'button'>) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'truncate text-left after:absolute after:inset-0 focus-visible:outline-none',
+        className,
+      )}
+      title={label}
+      {...props}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function RowActions({ children }: { children: ReactNode }) {
+  return (
+    <span className="relative z-10 flex items-center gap-0.5">{children}</span>
+  );
+}

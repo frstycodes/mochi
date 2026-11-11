@@ -1033,6 +1033,10 @@ const REPORT_SPECS = {
       };
     },
   },
+  // Nothing to store: the call's own activity entry is the record (`logbook/logbook.ts`).
+  record_answer: {
+    run: () => ({ result: { recorded: true } }),
+  },
   report_to_parent: {
     run: ({ caller, args, dispatch }) => {
       if (!caller.parent)

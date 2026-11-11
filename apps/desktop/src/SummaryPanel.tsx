@@ -19,6 +19,9 @@ import {
   BackgroundTask,
   Code,
   Chart,
+  Chat,
+  MessageQuestion,
+  Scale,
   File,
   Grip,
   Image,
@@ -118,6 +121,14 @@ import { useLaunchNames, usePorts } from './terminal/ports';
 import { portUrl } from '@mochi/domain/terminal/devServer';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { PortIcon } from './pane/PortIcon';
+import { revealMessage } from './chat/Transcript';
+import {
+  LOGBOOK_KINDS,
+  LOGBOOK_LABELS,
+  type Logbook,
+  type LogbookKind,
+} from './logbook/LogbookRows';
+import { useThreadLogbook } from './logbook/useLogbook';
 import { queuedMessage } from './chat/outbox';
 import {
   artifactsOf,
@@ -179,7 +190,7 @@ function SummaryBody({
   thread: Thread;
   onPaneOpened?: () => void;
 }) {
-  const { summary, cards, links, ports, launchNames, outputs, open } =
+  const { summary, cards, links, ports, launchNames, outputs, log, open } =
     useSummary(thread, onPaneOpened);
   const [order, reorder] = useCardOrder(cards);
   const [openCards, setOpenCards] = useState(OPEN_BY_DEFAULT);
@@ -201,6 +212,7 @@ function SummaryBody({
     running: <RunningCard {...props} ports={ports} launchNames={launchNames} />,
     changes: <ChangesCard {...props} outputs={outputs} />,
     threads: <ThreadsCard {...links} />,
+    logbook: <LogbookCard {...props} log={log} />,
     sources: <SourcesCard {...props} />,
     environment: <EnvironmentCard {...props} />,
   } satisfies Record<SummaryCardId, ReactNode>;
@@ -341,6 +353,7 @@ function useSummary(thread: Thread, onPaneOpened?: () => void) {
   const outputs = artifactsOf(thread, thread.repo ? null : cwd);
   const outputCount = outputs.files.length + outputs.visuals.length;
   const links = useThreadLinks(thread);
+  const log = useThreadLogbook(thread);
   const cards = summaryCards({
     thread,
     summary,
@@ -348,8 +361,9 @@ function useSummary(thread: Thread, onPaneOpened?: () => void) {
       +!!links.parent + links.subs.length + links.replyTo.length,
     portCount: ports.length,
     outputCount,
+    logbookCount: LOGBOOK_KINDS.reduce((n, kind) => n + log[kind].length, 0),
   });
-  return { summary, cards, links, ports, launchNames, outputs, open };
+  return { summary, cards, links, ports, launchNames, outputs, log, open };
 }
 
 /** The threads this one is tied to: its parent, its open sub-threads, and the ones its next turn end answers. */
@@ -559,6 +573,48 @@ function SourcesCard({ thread, summary, open }: CardProps) {
     </>
   );
 }
+
+/** The newest answers by their question, each opening the thread at its reply; decisions and deferred work are one counted row each, opening the Logbook pane. */
+function LogbookCard({ thread, open, log }: CardProps & { log: Logbook }) {
+  const count = LOGBOOK_KINDS.reduce((n, kind) => n + log[kind].length, 0);
+  return (
+    <>
+      <CardHeader title="Logbook" meta={count} />
+      <CardBody>
+        <LimitedList items={log.answers.toReversed()}>
+          {(answer) => (
+            <SummaryRow
+              key={answer.key}
+              icon={MessageQuestion}
+              label={answer.question}
+              hint={answer.summary}
+              onClick={() => revealMessage(thread.id, answer.index)}
+            />
+          )}
+        </LimitedList>
+        {LOGBOOK_ROWS.filter(({ kind }) => log[kind].length > 0).map(
+          ({ kind, icon }) => (
+            <SummaryRow
+              key={kind}
+              icon={icon}
+              label={LOGBOOK_LABELS[kind]}
+              onClick={open.logbook}
+            >
+              <span className="tabular type-caption text-subtle-foreground">
+                {log[kind].length}
+              </span>
+            </SummaryRow>
+          ),
+        )}
+      </CardBody>
+    </>
+  );
+}
+
+const LOGBOOK_ROWS = [
+  { kind: 'decisions', icon: Scale },
+  { kind: 'proposals', icon: Chat },
+] as const satisfies { kind: LogbookKind; icon: IconComponent }[];
 
 function SkillRows({
   thread,
@@ -1223,6 +1279,8 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
   return {
     changes: () =>
       toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }),
+    logbook: () =>
+      toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'logbook' }),
     source,
     output,
     visual,

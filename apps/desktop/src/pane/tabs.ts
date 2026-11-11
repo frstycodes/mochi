@@ -6,6 +6,7 @@ import { ArtifactsTab } from './ArtifactsTab';
 import { BrowserTab } from './BrowserTab';
 import { ChangesTab } from './ChangesTab';
 import { FilesTab } from './FilesTab';
+import { LogbookTab } from '../logbook/LogbookTab';
 import { PortsTab } from './PortsTab';
 import { PrTab } from './PrTab';
 import { SideChatTab } from './SideChatTab';
@@ -31,6 +32,7 @@ const COMPONENTS = {
   visual: VisualTab,
   artifacts: ArtifactsTab,
   pr: PrTab,
+  logbook: LogbookTab,
 } satisfies Record<PaneTabKind, ComponentType<PaneTabProps>>;
 
 export const PANE_TABS = Object.fromEntries(

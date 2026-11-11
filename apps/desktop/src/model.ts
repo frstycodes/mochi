@@ -816,6 +816,7 @@ export const PANE_TAB_KINDS = [
   'visual',
   'artifacts',
   'pr',
+  'logbook',
 ] as const;
 export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
