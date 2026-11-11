@@ -11,6 +11,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cachedDoc, writeDoc } from '@mochi/core/store/client';
 import type { LightsPlacement } from '../src/host/types/windows.ts';
+import { showSidebarGlass } from './sidebarGlass/sidebarGlass.ts';
 
 // index.css's default `--background` (oklch 0.185 / 0.982) in sRGB, the splash's colour in index.html: shown before the page paints.
 const background = () =>
@@ -19,7 +20,12 @@ const background = () =>
 // Windows 11 22H2 (build 22621) and up draw Mica; older Windows and Linux keep the solid sidebar.
 const hasMica = () =>
   process.platform === 'win32' && Number(release().split('.')[2]) >= 22621;
+// macOS 26 (Darwin 25) and up draw glass under the sidebar (electron/sidebarGlass).
+const hasGlass = () =>
+  process.platform === 'darwin' && Number(release().split('.')[0]) >= 25;
+type Material = 'mica' | 'glass';
 const materialWindows = new WeakSet<BrowserWindow>();
+const glassWindows = new WeakSet<BrowserWindow>();
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
@@ -130,7 +136,16 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
       nodeIntegration: false,
     },
   });
-  if (isMica) showMica(win);
+  if (isMica) {
+    win.setBackgroundColor('#00000000');
+    showMaterial(win, 'mica');
+  } else if (!route && hasGlass())
+    // GAP: the built-in themes' page colour; a custom theme's sidebar sits over this, not its own colour.
+    void showSidebarGlass(win, background()).then((isShown) => {
+      if (!isShown) return;
+      glassWindows.add(win);
+      showMaterial(win, 'glass');
+    });
   win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => {
     fitWindowButtons(win);
@@ -176,19 +191,18 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
 }
 
 /**
- * The shell window's sidebar shows Windows 11's Mica through the page: `data-material` in index.css.
+ * The shell window's sidebar shows the window material (Mica on Windows 11, glass on macOS 26+) through the page: `data-material` in index.css.
  * Off in full screen, where there's no wallpaper to light it, and with Reduce Transparency on: the opaque page then covers
  * the material and the sidebar keeps the theme's own colour. That setting is re-read on focus, as no event reports it.
  */
-function showMica(win: BrowserWindow) {
+function showMaterial(win: BrowserWindow, material: Material) {
   materialWindows.add(win);
-  win.setBackgroundColor('#00000000');
   const mark = () => {
     const isShown =
       !win.isFullScreen() && !nativeTheme.prefersReducedTransparency;
     void win.webContents.executeJavaScript(
       isShown
-        ? `document.documentElement.dataset.material = 'mica'`
+        ? `document.documentElement.dataset.material = '${material}'`
         : `delete document.documentElement.dataset.material`,
     );
   };
@@ -202,6 +216,7 @@ function showMica(win: BrowserWindow) {
 nativeTheme.on('updated', () =>
   BrowserWindow.getAllWindows().forEach((win) => {
     if (!materialWindows.has(win)) win.setBackgroundColor(background());
+    if (glassWindows.has(win)) void showSidebarGlass(win, background());
     fitWindowButtons(win);
   }),
 );
