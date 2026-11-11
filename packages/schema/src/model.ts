@@ -210,6 +210,7 @@ export const PaneTabKind = Schema.Literals([
   'visual',
   'artifacts',
   'pr',
+  'logbook',
 ]);
 export type PaneTabKind = typeof PaneTabKind.Type;
 

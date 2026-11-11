@@ -72,6 +72,7 @@ export const MOCHI_CALLS = {
   open_changes: ['Opening the changes', 'Opened the changes'],
   ask_side_chat: ['Asking the side chat', 'Asked the side chat'],
   send_files: ['Sending you files', 'Sent you files'],
+  record_answer: ['Recording an answer', 'Recorded an answer'],
   notify_user: ['Notifying you', 'Notified you'],
   open_settings_chat: [
     'Handing this to the settings chat',

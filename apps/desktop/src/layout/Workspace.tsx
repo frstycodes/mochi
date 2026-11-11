@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { ErrorBoundary } from 'react-error-boundary';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
-import { Archive, Edit, Folder, Ban, Inbox, Chart } from '@/icons';
+import { Archive, Book, Edit, Folder, Ban, Inbox, Chart } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ErrorFallback } from '@/components/ErrorFallback';
 import {
@@ -36,6 +36,7 @@ import { NewThreadView } from '../NewThreadView';
 import { PANE_TABS, tabTitle } from '../pane/tabs';
 import { ProjectsView } from '../ProjectsView';
 import { SettledView } from '../settled/SettledView';
+import { LogbookView } from '../logbook/LogbookView';
 import { QueueView } from '../QueueView';
 import { useDispatch, useHarnessSelector, useThread } from '../store';
 import { useAnyThread } from '../store/anyThread';
@@ -265,6 +266,7 @@ const PAGES = {
   projects: { icon: Folder, title: 'Projects', component: ProjectsView },
   usage: { icon: Chart, title: 'Usage', component: UsagePage },
   settled: { icon: Archive, title: 'Settled', component: SettledView },
+  logbook: { icon: Book, title: 'Logbook', component: LogbookView },
 } satisfies Record<Exclude<View['kind'], 'thread' | 'tab'>, unknown>;
 
 type PageKind = keyof typeof PAGES;

@@ -1,5 +1,6 @@
 import {
   BackgroundTask,
+  Book,
   Chart,
   Folder,
   Layers,
@@ -27,4 +28,5 @@ export const PANE_TAB_LABELS = {
   visual: { title: 'Visual', icon: Chart },
   artifacts: { title: 'Artifacts', icon: Layers },
   pr: { title: 'Pull request', icon: GitPullRequestIcon },
+  logbook: { title: 'Logbook', icon: Book },
 } satisfies Record<PaneTabKind, { title: string; icon: IconComponent }>;

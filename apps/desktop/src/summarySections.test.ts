@@ -31,6 +31,7 @@ const cards = (
   portCount = 0,
   outputCount = 0,
   linkedThreadCount = 0,
+  logbookCount = 0,
 ) =>
   summaryCards({
     thread: t,
@@ -38,6 +39,7 @@ const cards = (
     linkedThreadCount,
     portCount,
     outputCount,
+    logbookCount,
   });
 
 test('a folderless chat shows only its sources', () => {
@@ -149,4 +151,13 @@ test('the running card shows only while a task runs', () => {
     ['sources', 'environment'],
     'finished tasks stay in the tab, not the card',
   );
+});
+
+test('the logbook card shows once something is logged, after linked threads', () => {
+  assert.deepEqual(cards(thread({}), 0, 0, 1, 2), [
+    'threads',
+    'logbook',
+    'sources',
+    'environment',
+  ]);
 });

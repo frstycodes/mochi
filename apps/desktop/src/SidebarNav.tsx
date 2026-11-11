@@ -7,6 +7,7 @@ import {
   Plugin,
   Skill,
   type IconComponent,
+  Book,
 } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
@@ -119,6 +120,7 @@ export const SIDEBAR_ITEMS = [
     icon: Folder,
     view: { kind: 'projects' },
   },
+  { id: 'logbook', label: 'Logbook', icon: Book, view: { kind: 'logbook' } },
   { id: 'skills', label: 'Skills', icon: Skill, section: 'skills' },
   { id: 'plugins', label: 'Plugins', icon: Plugin, section: 'plugins' },
   {

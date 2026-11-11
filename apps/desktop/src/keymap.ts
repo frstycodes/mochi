@@ -59,6 +59,7 @@ const PANES = {
   agents: ['Background tasks', 'A'],
   artifacts: ['Artifacts', 'R'],
   pr: ['Pull request', 'G'],
+  logbook: ['Logbook', 'L'],
 } as const;
 
 export type PaneCommandKind = keyof typeof PANES;

@@ -5,6 +5,7 @@ export type View =
   | { kind: 'projects' }
   | { kind: 'usage' }
   | { kind: 'settled' }
+  | { kind: 'logbook' }
   | { kind: 'new' }
   | { kind: 'thread'; id: string }
   | { kind: 'tab'; threadId: string; tabId: string };

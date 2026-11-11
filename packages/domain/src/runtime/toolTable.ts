@@ -859,6 +859,26 @@ export const TOOL_TABLE = {
       ),
     },
   },
+  record_answer: {
+    tier: 'read',
+    description:
+      "Record a question the user asked this turn whose answer is worth finding again after this work is done: how something works, why it is the way it is, a recommendation with its reasoning, a repeatable how-to, a researched fact. Not for the state of the current task (why a test failed, what's left, what you just did), clarifications, confirmations, or lookups. If the answer stops being true when this change lands, don't record it. When unsure, don't. Answer in chat as usual, in full: this only lists the answer in the user's Logbook, linked to your reply. Once per question.",
+    shape: {
+      question: Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(160),
+      ).annotate({
+        description:
+          'Self-contained, phrased as the durable question rather than the user\'s literal words, like "Why do sub-threads report instead of messaging?"',
+      }),
+      summary: Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(300),
+      ).annotate({
+        description: 'The answer in one or two sentences',
+      }),
+    },
+  },
   notify_user: {
     tier: 'change',
     quiet: true,
@@ -1159,6 +1179,7 @@ export const TURN_TOOLS = [
   'update_plan',
   'wrap_up',
   'report_to_parent',
+  'record_answer',
 ] as const satisfies ToolName[];
 
 export const isTurnTool = (name: string) =>
@@ -1166,11 +1187,12 @@ export const isTurnTool = (name: string) =>
 
 /**
  * Calls whose outcome a widget of its own draws, so they get no work-log row: the plan list, the next-move box, a thread
- * card or sub-thread link, a subagent row, a review, a dev server card, an approval card.
+ * card or sub-thread link, a subagent row, a review, a dev server card, an approval card, a Logbook answer.
  */
 export const WIDGET_TOOLS = [
   'update_plan',
   'wrap_up',
+  'record_answer',
   'create_thread',
   'dismiss_thread_proposal',
   'start_subagent',

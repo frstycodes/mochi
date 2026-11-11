@@ -314,6 +314,12 @@ export const TOOL_GUIDE = {
     description:
       'Show you images, videos and other files in the thread, to view there or open in their own app. Reads nothing new and changes nothing.',
   },
+  record_answer: {
+    group: 'Progress',
+    label: 'Record answers',
+    description:
+      'List a question you asked and its answer in your Logbook, linked to the reply. Changes nothing else.',
+  },
   notify_user: {
     group: 'Reaching you',
     label: 'Notify you',

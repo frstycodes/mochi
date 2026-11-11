@@ -63,6 +63,7 @@ export function Transcript({
   const isAtEnd = useIsAtEnd(mounted);
   useRememberScroll(threadId, list);
   useRevealCard(rows, list);
+  useRevealMessage(threadId, rows, list);
   const [initialIndex] = useState(() => restoredIndex(rows, remembered));
 
   return (
@@ -181,6 +182,37 @@ function useRevealCard(rows: ChatRow[], list: RefObject<LegendListRef | null>) {
     window.addEventListener(REVEAL_CARD, onReveal);
     return () => window.removeEventListener(REVEAL_CARD, onReveal);
   }, [rows, list]);
+}
+
+const REVEAL_MESSAGE = 'chat-reveal-message';
+let pendingReveal: { threadId: string; index: number } | undefined;
+
+/** Scrolls thread `threadId`'s transcript to the message at activity `index`, now or once that thread's transcript mounts. */
+export function revealMessage(threadId: string, index: number) {
+  pendingReveal = { threadId, index };
+  window.dispatchEvent(new Event(REVEAL_MESSAGE));
+}
+
+function useRevealMessage(
+  threadId: string,
+  rows: ChatRow[],
+  list: RefObject<LegendListRef | null>,
+) {
+  useEffect(() => {
+    const reveal = () => {
+      if (pendingReveal?.threadId !== threadId) return;
+      const { index } = pendingReveal;
+      const row = rows.findIndex(
+        (r) => r.kind === 'message' && r.index === index,
+      );
+      if (row < 0) return;
+      pendingReveal = undefined;
+      void list.current?.scrollToIndex({ index: row, viewPosition: 0.2 });
+    };
+    reveal();
+    window.addEventListener(REVEAL_MESSAGE, reveal);
+    return () => window.removeEventListener(REVEAL_MESSAGE, reveal);
+  }, [threadId, rows, list]);
 }
 
 /** Back to the newest message, shown once the reader has left the end. */

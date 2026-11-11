@@ -466,6 +466,7 @@ const VIEW_KINDS = {
   projects: true,
   usage: true,
   settled: true,
+  logbook: true,
   new: true,
   thread: true,
   tab: true,

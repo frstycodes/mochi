@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Copy, Pushpin, Undo, Sparkles, type IconProps } from '@/icons';
+import { Book, Copy, Pushpin, Undo, Sparkles, type IconProps } from '@/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,8 @@ import { openRewind } from '../rewind/requests';
 import { useRewindActions } from '../rewind/useRewindActions';
 import { usePrefs } from '../settings/prefs';
 import { ForkIcon, TooltipIconButton } from '../ui';
+import { answerAt, answersOf } from '../logbook/logbook';
+import { toggleSavedReply, useAnswerMarks } from '../logbook/marks';
 import { isMessagePinned, togglePin, useThreadPins } from './pins';
 import { ReadMark } from './SteerBubble';
 import {
@@ -27,7 +29,7 @@ import {
 } from '../simplify/useSimplify';
 
 export interface MessageAction {
-  id: 'copy' | 'pin' | 'fork' | 'simplify' | `rewind-${RewindMode}`;
+  id: 'copy' | 'pin' | 'fork' | 'simplify' | 'log' | `rewind-${RewindMode}`;
   label: string;
   hint?: string;
   icon: ComponentType<IconProps>;
@@ -43,6 +45,7 @@ export function useMessageActions(
   index: number,
 ): MessageAction[] {
   const pins = useThreadPins(thread.id);
+  const marks = useAnswerMarks(thread.id);
   const { rewind } = useRewindActions();
   const dispatch = useDispatch();
   const isSimplifying = useIsSimplifying(thread.id, index);
@@ -93,6 +96,17 @@ export function useMessageActions(
     isActive: isPinned,
     run: () => togglePin(thread.id, index),
   };
+  const isLogged = !!answerAt(answersOf(thread, marks), index);
+  const log: MessageAction = {
+    id: 'log',
+    label: isLogged ? 'Remove from Logbook' : 'Save to Logbook',
+    hint: isLogged
+      ? undefined
+      : 'Lists this reply as an answer you can find again, under the question you asked.',
+    icon: Book,
+    isActive: isLogged,
+    run: () => toggleSavedReply(thread, index),
+  };
   const isShown = !!entry.simplified?.isShown;
   const simplify: MessageAction = {
     id: 'simplify',
@@ -109,7 +123,7 @@ export function useMessageActions(
   const actions =
     entry.who === 'you'
       ? [copy, ...rewinds, fork, pin]
-      : [copy, simplify, fork, pin];
+      : [copy, simplify, fork, pin, log];
   return actions;
 }
 
