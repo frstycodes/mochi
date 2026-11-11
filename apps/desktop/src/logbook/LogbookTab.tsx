@@ -36,7 +36,7 @@ export function LogbookTab({ thread }: PaneTabProps) {
               kind={kind}
               log={log}
               now={now}
-              onOpen={(index) => revealMessage(thread.id, index)}
+              onOpen={(index, about) => revealMessage(thread.id, index, about)}
               onRemove={(answer) => removeAnswer(thread.id, answer)}
             />
           </PaneSection>

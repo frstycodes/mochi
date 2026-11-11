@@ -37,9 +37,9 @@ import { useSpaceLogbooks } from './useLogbook';
 export function LogbookView() {
   const page = useLogbookPage();
   const dispatch = useDispatch();
-  const open = (thread: Thread, index?: number) => {
+  const open = (thread: Thread, index?: number, about?: string) => {
     dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
-    if (index !== undefined) revealMessage(thread.id, index);
+    if (index !== undefined) revealMessage(thread.id, index, about);
   };
   const isEmpty = page.total === 0;
   const isFilteredEmpty = !isEmpty && page.groups.length === 0;
@@ -104,7 +104,7 @@ export function LogbookView() {
               kind={page.kind}
               log={log}
               now={page.now}
-              onOpen={(index) => open(thread, index)}
+              onOpen={(index, about) => open(thread, index, about)}
               onRemove={(answer) => removeAnswer(thread.id, answer)}
             />
           </PaneSection>

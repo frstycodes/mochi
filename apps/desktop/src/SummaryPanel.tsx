@@ -588,7 +588,13 @@ function LogbookCard({ thread, open, log }: CardProps & { log: Logbook }) {
               icon={MessageQuestion}
               label={answer.question}
               hint={answer.summary}
-              onClick={() => revealMessage(thread.id, answer.index)}
+              onClick={() =>
+                revealMessage(
+                  thread.id,
+                  answer.index,
+                  `${answer.question} ${answer.summary}`,
+                )
+              }
             />
           )}
         </LimitedList>
