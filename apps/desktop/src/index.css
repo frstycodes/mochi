@@ -713,6 +713,10 @@
     background: var(--glass);
     backdrop-filter: blur(20px) saturate(1.6);
   }
+  /* Over macOS's sidebar glass the page is see-through under the sidebar, and Chromium left stale patches there (light blocks on hovered rows) after repaints while this blur was on. */
+  :root[data-material='glass'] &:focus-within {
+    backdrop-filter: none;
+  }
   @media (prefers-reduced-transparency: reduce) {
     &:focus-within {
       background: var(--card);
