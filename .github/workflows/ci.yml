@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       # Installs Node, the pinned pnpm (package.json `packageManager`) and dependencies, with the store cached.
-      - uses: voidzero-dev/setup-vp@v1.21.2
+      - uses: voidzero-dev/setup-vp@v1.22.0
         with:
           node-version: '24'
           cache: true
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 2
-      - uses: voidzero-dev/setup-vp@v1.21.2
+      - uses: voidzero-dev/setup-vp@v1.22.0
         with:
           node-version: '24'
           cache: true
